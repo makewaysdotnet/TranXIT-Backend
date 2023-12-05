@@ -1,0 +1,39 @@
+{
+  "Routes": [
+    //Login API
+    {
+      "DownstreamPathTemplate": "/api/login",
+      "DownstreamSchema": "http",
+      "DownstreamHttpMethod": "POST",
+      "RouteIsCaseSensitive": false,
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "authservice",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/login",
+      "UpstreamHttpMethod": [ "Post" ],
+      "FileCacheOptions": { "TtlSeconds": 60 }
+    },
+    //Register API
+    {
+      "DownstreamPathTemplate": "/api/register",
+      "DownstreamSchema": "http",
+      "DownstreamHttpMethod": "POST",
+      "RouteIsCaseSensitive": false,
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "authservice",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/register",
+      "UpstreamHttpMethod": [ "Post" ],
+      "FileCacheOptions": { "TtlSeconds": 60 }
+    }
+    // End......................................
+  ],
+  "GlobalConfiguration": { "BaseUrl": "http://localhost:61259" }
+
+}

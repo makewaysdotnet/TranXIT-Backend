@@ -1,0 +1,56 @@
+version: '3.4'
+
+networks:
+  backend:
+  
+
+services:
+
+  ocelotapigw:
+    container_name: api-gateway
+    image: ${DOCKER_REGISTRY-}ocelotapigw
+    build:
+      context: .
+      dockerfile: OcelotApiGw/Dockerfile
+    ports:
+    - 61260:8080
+    networks:
+    - backend
+
+
+  authdb:
+    container_name: auth-db
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    ports:
+     - 1433:1433
+    environment:
+    - ACCEPT_EULA=Y
+    - MSSQL_SA_PASSWORD=Hamza_1234
+    volumes:
+    - ./data:/var/opt/mssql/data
+    networks:
+    - backend
+
+  authservice:
+    container_name: auth-service
+    image: ${DOCKER_REGISTRY-}authservice
+    build:
+      context: .
+      dockerfile: AuthService/Dockerfile
+    hostname: authservice
+    # ports:
+    # - 61263:8080
+    depends_on:
+    - authdb
+    networks:
+    - backend
+
+
+  courierservice:
+    image: ${DOCKER_REGISTRY-}courierservice
+    build:
+      context: .
+      dockerfile: CourierService/Dockerfile
+    networks:
+    - backend
+
