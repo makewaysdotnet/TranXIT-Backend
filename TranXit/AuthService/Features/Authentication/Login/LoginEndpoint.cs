@@ -1,5 +1,5 @@
 ﻿using AuthService.Database;
-using AuthService.Features.Login.TokenManager;
+using AuthService.Features.Authentication.TokenManager;
 using Carter;
 using FluentValidation;
 using Mapster;
@@ -7,17 +7,38 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using SharedServicesManager;
 
-namespace AuthService.Features.Login;
+namespace AuthService.Features.Authentication.Login;
 
-public static class UserLogin
+public class LoginEndpoint : CarterModule
 {
-	public class UserDto
+	public LoginEndpoint()
+		: base("/api")
+	{ }
+	public override void AddRoutes(IEndpointRouteBuilder app)
+	{
+		app.MapPost("/login", async (LoginRequest request, ISender sender) =>
+		{
+			var command = request.Adapt<AccountLogin.Command>();
+			var result = await sender.Send(command);
+			if (!result.isSuccess)
+			{
+				return Results.BadRequest(result);
+			}
+			return Results.Ok(result);
+		})
+			.WithName("Login");
+	}
+}
+
+public class AccountLogin
+{
+	public class LoginResult
 	{
 		public string Username { get; init; } = string.Empty;
 		public string Email { get; init; } = string.Empty;
 		public string Token { get; init; } = string.Empty;
 	}
-	public class Command : IRequest<Result<UserDto>>
+	public class Command : IRequest<Result<LoginResult>>
 	{
 		public string Email { get; set; } = string.Empty;
 
@@ -45,9 +66,9 @@ public static class UserLogin
 		IValidator<Command> validator,
 		IJwtTokenBuilder jwtTokenBuilder,
 		IConfiguration configuration)
-		: IRequestHandler<Command, Result<UserDto>>
+		: IRequestHandler<Command, Result<LoginResult>>
 	{
-		public async Task<Result<UserDto>> Handle(Command request, CancellationToken cancellationToken)
+		public async Task<Result<LoginResult>> Handle(Command request, CancellationToken cancellationToken)
 		{
 			var validationResult = await validator.ValidateAsync(request);
 			if (!validationResult.IsValid)
@@ -76,37 +97,12 @@ public static class UserLogin
 				Username = user.Username
 			};
 			var token = jwtTokenBuilder.BuildToken(tokenBuilderRequest);
-			return new UserDto
+			return new LoginResult
 			{
 				Email = user.Email,
 				Username = user.Username,
 				Token = token
 			};
-
 		}
-	}
-
-
-}
-public class LoginEndpoint : CarterModule
-{
-	public LoginEndpoint()
-		: base("/api")
-	{
-
-	}
-	public override void AddRoutes(IEndpointRouteBuilder app)
-	{
-		app.MapPost("/login", async (LoginRequest request, ISender sender) =>
-		{
-			var command = request.Adapt<UserLogin.Command>();
-			var result = await sender.Send(command);
-			if (!result.isSuccess)
-			{
-				return Results.BadRequest(result);
-			}
-			return Results.Ok(result);
-		})
-			.WithName("Login");
 	}
 }

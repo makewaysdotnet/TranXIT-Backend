@@ -1,5 +1,5 @@
 using AuthService.Database;
-using AuthService.Features.Login.TokenManager;
+using AuthService.Features.Authentication.TokenManager;
 using Carter;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
