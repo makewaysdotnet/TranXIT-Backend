@@ -1,0 +1,19 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/TranXit/.vs
+
+/TranXit/obj
+/TranXit/bin
+
+/TranXit/AccountService/obj
+/TranXit/AccountService/bin
+
+
+/TranXit/OcelotApiGw/obj
+/TranXit/OcelotApiGw/bin
+
+# SharedServicesManager
+
+/TranXit/SharedServicesManager/obj
+/TranXit/SharedServicesManager/bin
