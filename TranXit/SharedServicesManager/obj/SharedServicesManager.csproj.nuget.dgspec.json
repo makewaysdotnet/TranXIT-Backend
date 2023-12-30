@@ -47,7 +47,7 @@
           "dependencies": {
             "FluentValidation.DependencyInjectionExtensions": {
               "target": "Package",
-              "version": "[11.8.1, )"
+              "version": "[11.9.0, )"
             },
             "Mapster": {
               "target": "Package",
@@ -58,12 +58,6 @@
               "version": "[12.2.0, )"
             },
             "Microsoft.AspNetCore.Authentication.JwtBearer": {
-              "target": "Package",
-              "version": "[8.0.0, )"
-            },
-            "Microsoft.EntityFrameworkCore.Design": {
-              "include": "Runtime, Build, Native, ContentFiles, Analyzers, BuildTransitive",
-              "suppressParent": "All",
               "target": "Package",
               "version": "[8.0.0, )"
             },

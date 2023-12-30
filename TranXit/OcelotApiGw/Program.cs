@@ -3,7 +3,6 @@ using Microsoft.IdentityModel.Tokens;
 using Ocelot.Cache.CacheManager;
 using Ocelot.DependencyInjection;
 using Ocelot.Middleware;
-using Ocelot.Values;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -52,6 +51,7 @@ app.UseCors(options =>
 		.AllowAnyHeader()
 		.AllowCredentials();
 });
+
 app.UseAuthentication();
 app.UseAuthorization();
 await app.UseOcelot();

@@ -1,7 +1,7 @@
 name: dockercompose2991031574848218461
 services:
-  authdb:
-    container_name: auth-db
+  accountdb:
+    container_name: account-db
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: Hamza_1234
@@ -14,23 +14,24 @@ services:
         published: "1433"
         protocol: tcp
     volumes:
-      - type: volume
-        source: tranxit-auth-db-volume
+      - type: bind
+        source: C:\Projects\TranXIT-Backend\TranXit\data
         target: /var/opt/mssql/data
-        volume: {}
-  authservice:
+        bind:
+          create_host_path: true
+  accountservice:
     build:
       context: C:\Projects\TranXIT-Backend\TranXit
-      dockerfile: AuthService/Dockerfile
+      dockerfile: AccountService/Dockerfile
       args:
         BUILD_CONFIGURATION: Debug
       labels:
         com.microsoft.created-by: visual-studio
-        com.microsoft.visual-studio.project-name: AuthService
+        com.microsoft.visual-studio.project-name: AccountService
       target: base
-    container_name: auth-service
+    container_name: account-service
     depends_on:
-      authdb:
+      accountdb:
         condition: service_started
         required: true
     entrypoint:
@@ -44,10 +45,9 @@ services:
       ASPNETCORE_LOGGING__CONSOLE__DISABLECOLORS: "true"
       DOTNET_USE_POLLING_FILE_WATCHER: "1"
       NUGET_FALLBACK_PACKAGES: /.nuget/fallbackpackages;/.nuget/fallbackpackages2
-    hostname: authservice
-    image: authservice:dev
+    image: accountservice:dev
     labels:
-      com.microsoft.visualstudio.debuggee.arguments: ' --additionalProbingPath /.nuget/packages --additionalProbingPath /.nuget/fallbackpackages --additionalProbingPath /.nuget/fallbackpackages2  "/app/bin/Debug/net8.0/AuthService.dll"'
+      com.microsoft.visualstudio.debuggee.arguments: ' --additionalProbingPath /.nuget/packages --additionalProbingPath /.nuget/fallbackpackages --additionalProbingPath /.nuget/fallbackpackages2  "/app/bin/Debug/net8.0/AccountService.dll"'
       com.microsoft.visualstudio.debuggee.killprogram: /bin/sh -c "if PID=$$(pidof dotnet); then kill $$PID; fi"
       com.microsoft.visualstudio.debuggee.program: dotnet
       com.microsoft.visualstudio.debuggee.workingdirectory: /app
@@ -56,10 +56,6 @@ services:
     ports:
       - mode: ingress
         target: 8080
-        protocol: tcp
-      - mode: ingress
-        target: 8080
-        published: "61263"
         protocol: tcp
       - mode: ingress
         target: 8081
@@ -103,7 +99,7 @@ services:
         bind:
           create_host_path: true
       - type: bind
-        source: C:\Projects\TranXIT-Backend\TranXit\AuthService
+        source: C:\Projects\TranXIT-Backend\TranXit\AccountService
         target: /app
         bind:
           create_host_path: true
@@ -262,7 +258,3 @@ services:
 networks:
   backend:
     name: dockercompose2991031574848218461_backend
-volumes:
-  tranxit-auth-db-volume:
-    name: tranxit-auth-db-volume
-    external: true

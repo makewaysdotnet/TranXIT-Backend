@@ -1,13 +1,13 @@
 version: '3.4'
 
 services:
-  authservice:
+  accountservice:
     build:
       args:
         BUILD_CONFIGURATION: Release
       labels:
         com.microsoft.created-by: "visual-studio"
-        com.microsoft.visual-studio.project-name: "AuthService"
+        com.microsoft.visual-studio.project-name: "AccountService"
     volumes:
       - C:\Users\DELL\vsdbg\vs2017u5:/remote_debugger:rw
       - ${APPDATA}/ASP.NET/Https:/root/.aspnet/https:ro
@@ -21,38 +21,11 @@ services:
     entrypoint: tail -f /dev/null
     labels:
       com.microsoft.visualstudio.debuggee.program: "dotnet"
-      com.microsoft.visualstudio.debuggee.arguments: " --additionalProbingPath /.nuget/packages --additionalProbingPath /.nuget/fallbackpackages --additionalProbingPath /.nuget/fallbackpackages2  \"/app/AuthService.dll\""
+      com.microsoft.visualstudio.debuggee.arguments: " --additionalProbingPath /.nuget/packages --additionalProbingPath /.nuget/fallbackpackages --additionalProbingPath /.nuget/fallbackpackages2  \"/app/AccountService.dll\""
       com.microsoft.visualstudio.debuggee.workingdirectory: "/app"
       com.microsoft.visualstudio.debuggee.killprogram: "/bin/sh -c \"if PID=$$(pidof dotnet); then kill $$PID; fi\""
-      com.microsoft.visual-studio.project-name: "AuthService"
+      com.microsoft.visual-studio.project-name: "AccountService"
     tty: true
-  courierservice:
-    container_name: "CourierService"
-    build:
-      args:
-        BUILD_CONFIGURATION: Release
-      labels:
-        com.microsoft.created-by: "visual-studio"
-        com.microsoft.visual-studio.project-name: "CourierService"
-    volumes:
-      - C:\Users\DELL\vsdbg\vs2017u5:/remote_debugger:rw
-      - ${APPDATA}/ASP.NET/Https:/root/.aspnet/https:ro
-      - ${APPDATA}/ASP.NET/Https:/home/app/.aspnet/https:ro
-      - ${APPDATA}/Microsoft/UserSecrets:/root/.microsoft/usersecrets:ro
-      - ${APPDATA}/Microsoft/UserSecrets:/home/app/.microsoft/usersecrets:ro
-      - C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Sdks\Microsoft.Docker.Sdk\tools\TokenService.Proxy\linux-x64\net6.0:/TokenService.Proxy:ro
-      - C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Sdks\Microsoft.Docker.Sdk\tools\HotReloadProxy\linux-x64\net6.0:/HotReloadProxy:ro
-      - C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\HotReload:/HotReloadAgent:ro
-
-    entrypoint: tail -f /dev/null
-    labels:
-      com.microsoft.visualstudio.debuggee.program: "dotnet"
-      com.microsoft.visualstudio.debuggee.arguments: " --additionalProbingPath /.nuget/packages --additionalProbingPath /.nuget/fallbackpackages --additionalProbingPath /.nuget/fallbackpackages2  \"/app/CourierService.dll\""
-      com.microsoft.visualstudio.debuggee.workingdirectory: "/app"
-      com.microsoft.visualstudio.debuggee.killprogram: "/bin/sh -c \"if PID=$$(pidof dotnet); then kill $$PID; fi\""
-      com.microsoft.visual-studio.project-name: "CourierService"
-    tty: true
-
   ocelotapigw:
     build:
       args:

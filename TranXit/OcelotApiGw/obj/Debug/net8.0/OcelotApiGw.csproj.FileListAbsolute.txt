@@ -11,11 +11,18 @@ C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\CacheManager.Mi
 C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\CacheManager.Microsoft.Extensions.Logging.dll
 C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\FluentValidation.dll
 C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\IPAddressRange.dll
+C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\Microsoft.AspNetCore.Authentication.JwtBearer.dll
 C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\Microsoft.AspNetCore.JsonPatch.dll
 C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\Microsoft.AspNetCore.MiddlewareAnalysis.dll
 C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\Microsoft.AspNetCore.Mvc.NewtonsoftJson.dll
 C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\Microsoft.AspNetCore.OpenApi.dll
 C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\Microsoft.Extensions.DiagnosticAdapter.dll
+C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\Microsoft.IdentityModel.Abstractions.dll
+C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\Microsoft.IdentityModel.JsonWebTokens.dll
+C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\Microsoft.IdentityModel.Logging.dll
+C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\Microsoft.IdentityModel.Protocols.dll
+C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\Microsoft.IdentityModel.Protocols.OpenIdConnect.dll
+C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\Microsoft.IdentityModel.Tokens.dll
 C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\Microsoft.OpenApi.dll
 C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\Newtonsoft.Json.dll
 C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\Newtonsoft.Json.Bson.dll
@@ -26,6 +33,7 @@ C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\Swashbuckle.Asp
 C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\Swashbuckle.AspNetCore.SwaggerUI.dll
 C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\System.Configuration.ConfigurationManager.dll
 C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\System.Diagnostics.PerformanceCounter.dll
+C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\System.IdentityModel.Tokens.Jwt.dll
 C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\System.Security.Cryptography.ProtectedData.dll
 C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\System.Security.Permissions.dll
 C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\runtimes\win\lib\netcoreapp2.0\System.Diagnostics.PerformanceCounter.dll
@@ -37,6 +45,7 @@ C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\obj\Debug\net8.0\OcelotApiGw.Ass
 C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\obj\Debug\net8.0\OcelotApiGw.csproj.CoreCompileInputs.cache
 C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\obj\Debug\net8.0\OcelotApiGw.MvcApplicationPartsAssemblyInfo.cs
 C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\obj\Debug\net8.0\OcelotApiGw.MvcApplicationPartsAssemblyInfo.cache
+C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\obj\Debug\net8.0\OcelotApiGw.sourcelink.json
 C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\obj\Debug\net8.0\staticwebassets.build.json
 C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\obj\Debug\net8.0\staticwebassets.development.json
 C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\obj\Debug\net8.0\staticwebassets\msbuild.OcelotApiGw.Microsoft.AspNetCore.StaticWebAssets.props
@@ -51,11 +60,3 @@ C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\obj\Debug\net8.0\refint\OcelotAp
 C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\obj\Debug\net8.0\OcelotApiGw.pdb
 C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\obj\Debug\net8.0\OcelotApiGw.genruntimeconfig.cache
 C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\obj\Debug\net8.0\ref\OcelotApiGw.dll
-C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\Microsoft.AspNetCore.Authentication.JwtBearer.dll
-C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\Microsoft.IdentityModel.Abstractions.dll
-C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\Microsoft.IdentityModel.JsonWebTokens.dll
-C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\Microsoft.IdentityModel.Logging.dll
-C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\Microsoft.IdentityModel.Protocols.dll
-C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\Microsoft.IdentityModel.Protocols.OpenIdConnect.dll
-C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\Microsoft.IdentityModel.Tokens.dll
-C:\Projects\TranXIT-Backend\TranXit\OcelotApiGw\bin\Debug\net8.0\System.IdentityModel.Tokens.Jwt.dll

@@ -8,11 +8,27 @@
       "RouteIsCaseSensitive": false,
       "DownstreamHostAndPorts": [
         {
-          "Host": "authservice",
+          "Host": "accountservice",
           "Port": 8080
         }
       ],
       "UpstreamPathTemplate": "/api/login",
+      "UpstreamHttpMethod": [ "Post" ],
+      "FileCacheOptions": { "TtlSeconds": 60 }
+    },
+    //Google Login API
+    {
+      "DownstreamPathTemplate": "/api/login/google",
+      "DownstreamSchema": "http",
+      "DownstreamHttpMethod": "POST",
+      "RouteIsCaseSensitive": false,
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "accountservice",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/login/google",
       "UpstreamHttpMethod": [ "Post" ],
       "FileCacheOptions": { "TtlSeconds": 60 }
     },
@@ -24,13 +40,50 @@
       "RouteIsCaseSensitive": false,
       "DownstreamHostAndPorts": [
         {
-          "Host": "authservice",
+          "Host": "accountservice",
           "Port": 8080
         }
       ],
       "UpstreamPathTemplate": "/api/register",
       "UpstreamHttpMethod": [ "Post" ],
       "FileCacheOptions": { "TtlSeconds": 60 }
+    },
+
+    //Get All Roles API
+    {
+      "DownstreamPathTemplate": "/api/roles",
+      "DownstreamSchema": "http",
+      "DownstreamHttpMethod": "GET",
+      "RouteIsCaseSensitive": false,
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "accountservice",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/roles",
+      "UpstreamHttpMethod": [ "Get" ],
+      "FileCacheOptions": { "TtlSeconds": 60 }
+    },
+
+    //Get All Role by id API
+    {
+      "DownstreamPathTemplate": "/api/roles/{id}",
+      "DownstreamSchema": "http",
+      "DownstreamHttpMethod": "GET",
+      "RouteIsCaseSensitive": false,
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "accountservice",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/roles/{id}",
+      "UpstreamHttpMethod": [ "Get" ],
+      "FileCacheOptions": { "TtlSeconds": 60 },
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      }
     }
     // End......................................
   ],

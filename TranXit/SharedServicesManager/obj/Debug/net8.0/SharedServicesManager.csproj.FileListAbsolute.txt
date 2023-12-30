@@ -7,6 +7,7 @@ C:\Projects\TranXIT-Backend\TranXit\SharedServicesManager\obj\Debug\net8.0\Share
 C:\Projects\TranXIT-Backend\TranXit\SharedServicesManager\obj\Debug\net8.0\SharedServicesManager.AssemblyInfoInputs.cache
 C:\Projects\TranXIT-Backend\TranXit\SharedServicesManager\obj\Debug\net8.0\SharedServicesManager.AssemblyInfo.cs
 C:\Projects\TranXIT-Backend\TranXit\SharedServicesManager\obj\Debug\net8.0\SharedServicesManager.csproj.CoreCompileInputs.cache
+C:\Projects\TranXIT-Backend\TranXit\SharedServicesManager\obj\Debug\net8.0\SharedServicesManager.sourcelink.json
 C:\Projects\TranXIT-Backend\TranXit\SharedServicesManager\obj\Debug\net8.0\SharedServicesManager.dll
 C:\Projects\TranXIT-Backend\TranXit\SharedServicesManager\obj\Debug\net8.0\refint\SharedServicesManager.dll
 C:\Projects\TranXIT-Backend\TranXit\SharedServicesManager\obj\Debug\net8.0\SharedServicesManager.pdb

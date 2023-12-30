@@ -1,7 +1,7 @@
 name: dockercompose2991031574848218461
 services:
-  authdb:
-    container_name: auth-db
+  accountdb:
+    container_name: account-db
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: Hamza_1234
@@ -14,34 +14,30 @@ services:
         published: "1433"
         protocol: tcp
     volumes:
-      - type: volume
-        source: tranxit-auth-db-volume
+      - type: bind
+        source: C:\Projects\TranXIT-Backend\TranXit\data
         target: /var/opt/mssql/data
-        volume: {}
-  authservice:
+        bind:
+          create_host_path: true
+  accountservice:
     build:
       context: C:\Projects\TranXIT-Backend\TranXit
-      dockerfile: AuthService/Dockerfile
-    container_name: auth-service
+      dockerfile: AccountService/Dockerfile
+    container_name: account-service
     depends_on:
-      authdb:
+      accountdb:
         condition: service_started
         required: true
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_HTTP_PORTS: "8080"
       ASPNETCORE_HTTPS_PORTS: "8081"
-    hostname: authservice
-    image: authservice
+    image: accountservice
     networks:
       backend: null
     ports:
       - mode: ingress
         target: 8080
-        protocol: tcp
-      - mode: ingress
-        target: 8080
-        published: "61263"
         protocol: tcp
       - mode: ingress
         target: 8081
@@ -98,7 +94,3 @@ services:
 networks:
   backend:
     name: dockercompose2991031574848218461_backend
-volumes:
-  tranxit-auth-db-volume:
-    name: tranxit-auth-db-volume
-    external: true

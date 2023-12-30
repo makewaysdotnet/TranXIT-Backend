@@ -18,8 +18,8 @@ services:
     - backend
 
 
-  authdb:
-    container_name: auth-db
+  accountdb:
+    container_name: account-db
     image: mcr.microsoft.com/mssql/server:2019-latest
     ports:
      - 1433:1433
@@ -31,26 +31,13 @@ services:
     networks:
     - backend
 
-  authservice:
-    container_name: auth-service
-    image: ${DOCKER_REGISTRY-}authservice
+  accountservice:
+    container_name: account-service
+    image: ${DOCKER_REGISTRY-}accountservice
     build:
       context: .
-      dockerfile: AuthService/Dockerfile
-    hostname: authservice
-    # ports:
-    # - 61263:8080
+      dockerfile: AccountService/Dockerfile
     depends_on:
-    - authdb
+    - accountdb
     networks:
     - backend
-
-
-  courierservice:
-    image: ${DOCKER_REGISTRY-}courierservice
-    build:
-      context: .
-      dockerfile: CourierService/Dockerfile
-    networks:
-    - backend
-
