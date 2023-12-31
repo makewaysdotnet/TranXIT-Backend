@@ -7,11 +7,11 @@ namespace AccountService.Features.Authentication.TokenManager
 {
     internal interface IJwtTokenBuilder
     {
-        string BuildToken(TokenBuilderRequestModel requestModel);
+        string BuildToken(TokenBuilderRequest requestModel);
     }
     internal class JwtTokenBuilder : IJwtTokenBuilder
     {
-        public string BuildToken(TokenBuilderRequestModel requestModel)
+        public string BuildToken(TokenBuilderRequest requestModel)
         {
             var claims = new ClaimsIdentity(new List<Claim>
             {

@@ -1,6 +1,6 @@
 ﻿namespace AccountService.Features.Authentication.TokenManager
 {
-    public class TokenBuilderRequestModel
+    public class TokenBuilderRequest
     {
         public string UserId { get; set; } = string.Empty;
         public string Username { get; set; } = string.Empty;

@@ -74,7 +74,7 @@ public class AccountGoogleLogin
 				.Users
 				.Include(x => x.Role)
 				.FirstOrDefaultAsync(x => x.Email == request.Email, cancellationToken);
-			if (user == null)
+			if (user is null)
 			{
 				//Create User
 				user = new User
@@ -87,11 +87,11 @@ public class AccountGoogleLogin
 				await authDbContext.Users.AddAsync(user);
 				await authDbContext.SaveChangesAsync();
 			}
-			var tokenBuilderRequest = new TokenBuilderRequestModel
+			var tokenBuilderRequest = new TokenBuilderRequest
 			{
 				Email = user.Email,
 				ExpiryMinutes = double.Parse(configuration["Jwt:ExpiryMinutes"]!),
-				Role = user.Role is not null ? user.Role.Name! : "User",
+				Role = user.Role is not null ? user.Role.Name! : "",
 				SecretKey = configuration["JwtSecrets:Key"]!,
 				UserId = user!.Id.ToString(),
 				Username = user.Username
@@ -102,6 +102,7 @@ public class AccountGoogleLogin
 				Id = user.Id,
 				Email = user.Email,
 				Name = user.Username,
+				Role = user.Role is not null ? user.Role.Name! : null,
 				Provider = (ExternalLoginProviderEnum)Enum.Parse(typeof(ExternalLoginProviderEnum), user.Provider!),
 				Token = token
 			};

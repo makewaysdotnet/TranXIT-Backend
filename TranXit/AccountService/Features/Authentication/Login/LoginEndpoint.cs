@@ -82,7 +82,7 @@ public class AccountLogin
 			{
 				return new Error("Invalid password");
 			}
-			var tokenBuilderRequest = new TokenBuilderRequestModel
+			var tokenBuilderRequest = new TokenBuilderRequest
 			{
 				Email = user.Email,
 				ExpiryMinutes = double.Parse(configuration["Jwt:ExpiryMinutes"]!),

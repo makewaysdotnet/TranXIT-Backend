@@ -2,11 +2,10 @@ using AccountService.Database;
 using AccountService.Features.Authentication.TokenManager;
 using Carter;
 using FluentValidation;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
+using SharedManager.Extensions;
+using SharedServicesManager.EmailService;
 using SharedServicesManager.Middlewares;
-using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,22 +16,9 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.AddDbContext<AccountDbContext>(o =>
 	o.UseSqlServer(builder.Configuration.GetConnectionString("Database")));
+builder.Services.Configure<MailSettings>(builder.Configuration.GetSection("MailSettings"));
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-	.AddJwtBearer(option =>
-	{
-		option.RequireHttpsMetadata = false;
-		option.SaveToken = true;
-		option.TokenValidationParameters = new TokenValidationParameters
-		{
-			ValidateIssuerSigningKey = true,
-			ValidateIssuer = false,
-			ValidateAudience = false,
-			IssuerSigningKey = new SymmetricSecurityKey(Encoding
-			.UTF8
-			.GetBytes(builder.Configuration["JwtSecrets:Key"]!))
-		};
-	});
+builder.Services.AddJwtAuthentication();
 builder.Services.AddAuthorization();
 
 
@@ -41,6 +27,7 @@ var assembly = typeof(Program).Assembly;
 builder.Services.AddMediatR(config =>
 	config.RegisterServicesFromAssembly(assembly));
 builder.Services.AddScoped<IJwtTokenBuilder, JwtTokenBuilder>();
+builder.Services.AddScoped<IMailService, MailService>();
 
 builder.Services.AddCarter();
 
