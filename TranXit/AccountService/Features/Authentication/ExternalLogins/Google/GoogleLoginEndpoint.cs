@@ -85,7 +85,7 @@ public class AccountGoogleLogin
 					IsEmailVerified = true
 				};
 				await authDbContext.Users.AddAsync(user);
-				await authDbContext.SaveChangesAsync();
+				await authDbContext.SaveChangesAsync(cancellationToken);
 			}
 			var tokenBuilderRequest = new TokenBuilderRequest
 			{
@@ -94,7 +94,8 @@ public class AccountGoogleLogin
 				Role = user.Role is not null ? user.Role.Name! : "",
 				SecretKey = configuration["JwtSecrets:Key"]!,
 				UserId = user!.Id.ToString(),
-				Username = user.Username
+				Username = user.Username,
+				EmailVerified = true
 			};
 			var token = jwtTokenBuilder.BuildToken(tokenBuilderRequest);
 			return new LoginResult
@@ -104,6 +105,7 @@ public class AccountGoogleLogin
 				Name = user.Username,
 				Role = user.Role is not null ? user.Role.Name! : null,
 				Provider = (ExternalLoginProviderEnum)Enum.Parse(typeof(ExternalLoginProviderEnum), user.Provider!),
+				IsEmailVerified = user.IsEmailVerified is null ? false : (bool)user.IsEmailVerified!,
 				Token = token
 			};
 		}

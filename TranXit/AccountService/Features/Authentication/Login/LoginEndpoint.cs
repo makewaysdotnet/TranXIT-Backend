@@ -57,7 +57,7 @@ public class AccountLogin
 					.Matches(@"[\!\?\@\-\*\.]+").WithMessage("Your password must contain at least one (!*?-@.)");
 		}
 	}
-	internal sealed class Handler(AccountDbContext authDbContext,
+	internal sealed class Handler(AccountDbContext accountDbContext,
 		IValidator<Command> validator,
 		IJwtTokenBuilder jwtTokenBuilder,
 		IConfiguration configuration)
@@ -70,7 +70,7 @@ public class AccountLogin
 			{
 				return new Error(validationResult.ToString()); //Error("Validation Error").WithError(validationResult.ToString());
 			}
-			var user = await authDbContext
+			var user = await accountDbContext
 				.Users
 				.Include(x => x.Role)
 				.FirstOrDefaultAsync(x => x.Email == request.Email, cancellationToken);
@@ -89,7 +89,8 @@ public class AccountLogin
 				Role = user.Role is not null ? user.Role.Name! : "User",
 				SecretKey = configuration["JwtSecrets:Key"]!,
 				UserId = user!.Id.ToString(),
-				Username = user.Username
+				Username = user.Username,
+				EmailVerified = user.IsEmailVerified is null ? false : (bool)user.IsEmailVerified!,
 			};
 			var token = jwtTokenBuilder.BuildToken(tokenBuilderRequest);
 			return new LoginResult
@@ -97,6 +98,8 @@ public class AccountLogin
 				Id = user.Id,
 				Email = user.Email,
 				Name = user.Username,
+				Role = user.Role is not null ? user.Role.Name! : null,
+				IsEmailVerified = user.IsEmailVerified is null ? false : (bool)user.IsEmailVerified!,
 				Token = token
 			};
 		}

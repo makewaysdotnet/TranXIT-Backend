@@ -10,5 +10,6 @@ namespace AccountService.Features.Authentication.CommonResults
 		public string? Role { get; init; } = null;
 		public ExternalLoginProviderEnum? Provider { get; init; } = null;
 		public string Token { get; init; } = string.Empty;
+		public bool IsEmailVerified { get; init; } = false;
 	}
 }

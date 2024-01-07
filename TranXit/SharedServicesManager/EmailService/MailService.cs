@@ -6,12 +6,12 @@ namespace SharedServicesManager.EmailService;
 
 public interface IMailService
 {
-	Task<bool> SendMail(MailRequest request);
+	Task<bool> SendMail(MailRequest request, CancellationToken cancellationToken = default(CancellationToken));
 }
 public class MailService(IOptions<MailSettings> mailSettings) : IMailService
 {
 	MailSettings _mailSettings = mailSettings.Value;
-	public async Task<bool> SendMail(MailRequest request)
+	public async Task<bool> SendMail(MailRequest request, CancellationToken cancellationToken = default(CancellationToken))
 	{
 		try
 		{
@@ -19,8 +19,11 @@ public class MailService(IOptions<MailSettings> mailSettings) : IMailService
 			{
 				MailboxAddress emailFrom = new MailboxAddress(_mailSettings.SenderName, _mailSettings.SenderEmail);
 				emailMessage.From.Add(emailFrom);
-				MailboxAddress emailTo = new MailboxAddress(request.EmailToName, request.EmailTo);
-				emailMessage.To.Add(emailTo);
+				foreach (var emailAddress in request.EmailTo)
+				{
+					emailMessage.To.Add(MailboxAddress.Parse(emailAddress));
+				}
+				
 
 				//emailMessage.Cc.Add(new MailboxAddress("Cc Receiver", "cc@example.com"));
 				//emailMessage.Bcc.Add(new MailboxAddress("Bcc Receiver", "bcc@example.com"));
@@ -34,10 +37,10 @@ public class MailService(IOptions<MailSettings> mailSettings) : IMailService
 				//this is the SmtpClient from the Mailkit.Net.Smtp namespace, not the System.Net.Mail one
 				using (SmtpClient mailClient = new SmtpClient())
 				{
-					await mailClient.ConnectAsync(_mailSettings.Server, _mailSettings.Port, MailKit.Security.SecureSocketOptions.StartTls);
-					await mailClient.AuthenticateAsync(_mailSettings.UserName, _mailSettings.Password);
-					await mailClient.SendAsync(emailMessage);
-					await mailClient.DisconnectAsync(true);
+					await mailClient.ConnectAsync(_mailSettings.Server, _mailSettings.Port, MailKit.Security.SecureSocketOptions.Auto, cancellationToken);
+					await mailClient.AuthenticateAsync(_mailSettings.UserName, _mailSettings.Password, cancellationToken);
+					await mailClient.SendAsync(emailMessage, cancellationToken);
+					await mailClient.DisconnectAsync(true, cancellationToken);
 				}
 			}
 

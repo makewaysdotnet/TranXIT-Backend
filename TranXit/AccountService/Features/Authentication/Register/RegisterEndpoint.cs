@@ -5,6 +5,8 @@ using Mapster;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using SharedServicesManager;
+using SharedServicesManager.EmailService;
+using SharedServicesManager.Helpers;
 
 namespace AccountService.Features.Authentication.Register;
 
@@ -68,7 +70,10 @@ public class AccountRegister
 	}
 
 
-	internal sealed class Handler(AccountDbContext authDbContext, IValidator<Command> validator)
+	internal sealed class Handler(AccountDbContext accountDbContext,
+		IValidator<Command> validator,
+		IUtils utils,
+		IMailService mailService)
 		: IRequestHandler<Command, Result<bool>>
 	{
 		public async Task<Result<bool>> Handle(Command request, CancellationToken cancellationToken)
@@ -78,7 +83,7 @@ public class AccountRegister
 			{
 				return new Error(validationResult.ToString());
 			}
-			var user = await authDbContext
+			var user = await accountDbContext
 				.Users
 				.FirstOrDefaultAsync(x => x.Email == request.Email, cancellationToken);
 			if (user is not null)
@@ -86,15 +91,34 @@ public class AccountRegister
 				return new Error("User already exist");
 			}
 			var passwordHash = BC.EnhancedHashPassword(request.Password);
-			var newUser = new User
+			user = new User
 			{
 				Email = request.Email,
 				PasswordHash = passwordHash,
 				RoleId = request.RoleId,
 				Username = request.Username
 			};
-			await authDbContext.AddAsync(newUser);
-			await authDbContext.SaveChangesAsync(cancellationToken);
+			await accountDbContext.AddAsync(user);
+			await accountDbContext.SaveChangesAsync(cancellationToken);
+
+			//Send Email Verification Code
+			var code = utils.Generate6DRandomCode();
+			var mailRequest = new MailRequest
+			{
+				EmailTo = [request.Email],
+				EmailSubject = "Email Verification",
+				EmailBody = $"{code}"
+			};
+			var isMailSent = await mailService.SendMail(mailRequest);
+			if (!isMailSent)
+			{
+				return new Error("User Registered Successfully But Email Sent Failed, Retry Verification");
+			}
+			user.CodeSentAtUtc = DateTime.UtcNow;
+			user.VerificationCode = code;
+
+			accountDbContext.Users.Update(user);
+			await accountDbContext.SaveChangesAsync(cancellationToken);
 			return true;
 		}
 	}

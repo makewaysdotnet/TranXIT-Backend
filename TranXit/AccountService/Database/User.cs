@@ -19,5 +19,11 @@ public partial class User
 
     public bool? IsEmailVerified { get; set; }
 
+    public int? VerificationCode { get; set; }
+
+    public DateTime? CodeSentAtUtc { get; set; }
+
     public virtual Role? Role { get; set; }
+
+    public virtual ICollection<UserFile> UserFiles { get; set; } = new List<UserFile>();
 }

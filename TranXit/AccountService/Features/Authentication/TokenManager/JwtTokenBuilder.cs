@@ -18,7 +18,8 @@ namespace AccountService.Features.Authentication.TokenManager
                 new Claim(JwtRegisteredClaimNames.Email, requestModel.Email),
                 new Claim(ClaimTypes.Role, requestModel.Role),
                 new Claim(ClaimTypes.GivenName, requestModel.Username),
-                new Claim("UserId", requestModel.UserId)
+                new Claim("UserId", requestModel.UserId),
+                new Claim("EmailVerified", requestModel.EmailVerified.ToString())
             });
 
             var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(requestModel.SecretKey));

@@ -18,8 +18,8 @@ services:
     - backend
 
 
-  accountdb:
-    container_name: account-db
+  tranxitdb:
+    container_name: tranxit-db
     image: mcr.microsoft.com/mssql/server:2019-latest
     ports:
      - 1433:1433
@@ -27,7 +27,7 @@ services:
     - ACCEPT_EULA=Y
     - MSSQL_SA_PASSWORD=Hamza_1234
     volumes:
-    - ./data:/var/opt/mssql/data
+    - ./.containers/database/data:/var/opt/mssql/data
     networks:
     - backend
 
@@ -38,6 +38,21 @@ services:
       context: .
       dockerfile: AccountService/Dockerfile
     depends_on:
-    - accountdb
+    - tranxitdb
     networks:
     - backend
+
+
+  # emailmq:
+  #   image: rabbitmq:3-management
+  #   container_name: email-mq
+  #   hostname: emailmq
+  #   volumes:
+  #       - ./.containers/queue/data/:/var/lib/rabbitmq
+  #       - ./.containers/queue/log/:/var/log/rabbitmq
+  #   ports:
+  #     - 5672:5672
+  #     - 15672:15672
+  #   environment:
+  #       RABBITMQ_DEFAULT_USER: tranxit
+  #       RABBITMQ_DEFAULT_PASS: tranxit

@@ -8,5 +8,6 @@
         public string SecretKey { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
         public double ExpiryMinutes { get; set; } = 30;
-    }
+		public bool EmailVerified { get; set; } = false;
+	}
 }
