@@ -1,4 +1,6 @@
 ﻿using AccountService.Database;
+using AccountService.Features.Authentication.CommonResults;
+using AccountService.Features.Authentication.TokenManager;
 using Carter;
 using FluentValidation;
 using Mapster;
@@ -34,12 +36,13 @@ public class RegisterEndpoint : CarterModule
 
 public class AccountRegister
 {
-	public class Command : IRequest<Result<bool>>
+	public class Command : IRequest<Result<LoginResult>>
 	{
 		public string Email { get; set; } = string.Empty;
 		public string Password { get; set; } = string.Empty;
 		public string ConfirmPassword { get; set; } = string.Empty;
 		public string Username { get; set; } = string.Empty;
+		public string Phone { get; set; } = string.Empty;
 		public int? RoleId { get; set; }
 	}
 
@@ -72,11 +75,13 @@ public class AccountRegister
 
 	internal sealed class Handler(AccountDbContext accountDbContext,
 		IValidator<Command> validator,
+		IConfiguration configuration,
+		IJwtTokenBuilder jwtTokenBuilder,
 		IUtils utils,
 		IMailService mailService)
-		: IRequestHandler<Command, Result<bool>>
+		: IRequestHandler<Command, Result<LoginResult>>
 	{
-		public async Task<Result<bool>> Handle(Command request, CancellationToken cancellationToken)
+		public async Task<Result<LoginResult>> Handle(Command request, CancellationToken cancellationToken)
 		{
 			var validationResult = await validator.ValidateAsync(request);
 			if (!validationResult.IsValid)
@@ -96,7 +101,8 @@ public class AccountRegister
 				Email = request.Email,
 				PasswordHash = passwordHash,
 				RoleId = request.RoleId,
-				Username = request.Username
+				Username = request.Username,
+				Phone = request.Phone
 			};
 			await accountDbContext.AddAsync(user);
 			await accountDbContext.SaveChangesAsync(cancellationToken);
@@ -119,7 +125,29 @@ public class AccountRegister
 
 			accountDbContext.Users.Update(user);
 			await accountDbContext.SaveChangesAsync(cancellationToken);
-			return true;
+
+			var tokenBuilderRequest = new TokenBuilderRequest
+			{
+				Email = user.Email,
+				ExpiryMinutes = double.Parse(configuration["Jwt:ExpiryMinutes"]!),
+				Role = user.Role is not null ? user.Role.Name! : "",
+				SecretKey = configuration["JwtSecrets:Key"]!,
+				UserId = user!.Id.ToString(),
+				Username = user.Username,
+				EmailVerified = user.IsEmailVerified is null ? false : (bool)user.IsEmailVerified!,
+			};
+			var token = jwtTokenBuilder.BuildToken(tokenBuilderRequest);
+			return new LoginResult
+			{
+				Id = user.Id,
+				Email = user.Email,
+				Name = user.Username,
+				RoleId = user.RoleId,
+				Role = user.Role is not null ? user.Role.Name! : null,
+				IsEmailVerified = user.IsEmailVerified is null ? false : (bool)user.IsEmailVerified!,
+				Expires = DateTime.UtcNow.AddMinutes(tokenBuilderRequest.ExpiryMinutes).ToString(),
+				Token = token
+			};
 		}
 	}
 }

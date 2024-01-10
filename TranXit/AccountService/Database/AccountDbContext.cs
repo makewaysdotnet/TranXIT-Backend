@@ -33,6 +33,7 @@ public partial class AccountDbContext : DbContext
 			entity.Property(e => e.CodeSentAtUtc).HasColumnType("datetime");
 			entity.Property(e => e.Email).HasMaxLength(256);
 			entity.Property(e => e.IsEmailVerified).HasDefaultValue(false);
+			entity.Property(e => e.Phone).HasMaxLength(50);
 			entity.Property(e => e.Provider).HasMaxLength(100);
 			entity.Property(e => e.Username).HasMaxLength(256);
 
@@ -44,7 +45,7 @@ public partial class AccountDbContext : DbContext
 		modelBuilder.Entity<UserFile>(entity =>
 		{
 			entity.Property(e => e.Name).HasMaxLength(50);
-			entity.Property(e => e.Type).HasMaxLength(10);
+			entity.Property(e => e.Type).HasMaxLength(50);
 
 			entity.HasOne(d => d.User).WithMany(p => p.UserFiles)
 				.HasForeignKey(d => d.UserId)

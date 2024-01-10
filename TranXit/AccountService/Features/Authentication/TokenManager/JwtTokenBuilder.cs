@@ -27,7 +27,7 @@ namespace AccountService.Features.Authentication.TokenManager
             var tokenDescriptor = new SecurityTokenDescriptor
             {
                 Subject = claims,
-                Expires = DateTime.Now.AddMinutes(requestModel.ExpiryMinutes),
+                Expires = DateTime.UtcNow.AddMinutes(requestModel.ExpiryMinutes),
                 SigningCredentials = credentials
             };
             var securityTokenHandler = new JwtSecurityTokenHandler();

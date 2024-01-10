@@ -86,7 +86,7 @@ public class AccountLogin
 			{
 				Email = user.Email,
 				ExpiryMinutes = double.Parse(configuration["Jwt:ExpiryMinutes"]!),
-				Role = user.Role is not null ? user.Role.Name! : "User",
+				Role = user.Role is not null ? user.Role.Name! : "",
 				SecretKey = configuration["JwtSecrets:Key"]!,
 				UserId = user!.Id.ToString(),
 				Username = user.Username,
@@ -98,9 +98,11 @@ public class AccountLogin
 				Id = user.Id,
 				Email = user.Email,
 				Name = user.Username,
+				RoleId = user.RoleId,
 				Role = user.Role is not null ? user.Role.Name! : null,
 				IsEmailVerified = user.IsEmailVerified is null ? false : (bool)user.IsEmailVerified!,
-				Token = token
+				Token = token,
+				Expires = DateTime.UtcNow.AddMinutes(tokenBuilderRequest.ExpiryMinutes).ToString(),
 			};
 		}
 	}

@@ -23,6 +23,8 @@ public partial class User
 
     public DateTime? CodeSentAtUtc { get; set; }
 
+    public string? Phone { get; set; }
+
     public virtual Role? Role { get; set; }
 
     public virtual ICollection<UserFile> UserFiles { get; set; } = new List<UserFile>();

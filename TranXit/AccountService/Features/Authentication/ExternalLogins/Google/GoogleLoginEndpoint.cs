@@ -103,6 +103,7 @@ public class AccountGoogleLogin
 				Id = user.Id,
 				Email = user.Email,
 				Name = user.Username,
+				RoleId = user.RoleId,
 				Role = user.Role is not null ? user.Role.Name! : null,
 				Provider = (ExternalLoginProviderEnum)Enum.Parse(typeof(ExternalLoginProviderEnum), user.Provider!),
 				IsEmailVerified = user.IsEmailVerified is null ? false : (bool)user.IsEmailVerified!,

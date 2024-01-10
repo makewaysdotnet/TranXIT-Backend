@@ -2,7 +2,6 @@ using AccountService.Database;
 using AccountService.Features.Authentication.TokenManager;
 using Carter;
 using FluentValidation;
-using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using SharedManager.Extensions;
 using SharedServicesManager.EmailService;
@@ -22,6 +21,7 @@ builder.Services.Configure<MailSettings>(builder.Configuration.GetSection("MailS
 
 builder.Services.AddJwtAuthentication();
 builder.Services.AddAuthorization();
+//builder.Services.AddAntiforgery();
 
 
 var assembly = typeof(Program).Assembly;
@@ -37,20 +37,21 @@ builder.Services.AddCarter();
 builder.Services.AddValidatorsFromAssembly(assembly);
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
+builder.Services.AddHttpContextAccessor();
 
-builder.Services.AddMassTransit(busConfigurator =>
-{
-	busConfigurator.SetKebabCaseEndpointNameFormatter();
-	busConfigurator.UsingRabbitMq((context, config) =>
-	{
-		config.Host(new Uri(builder.Configuration["MessageBroker:Host"]!), h =>
-		{
-			h.Username(builder.Configuration["MessageBroker:Username"]!);
-			h.Password(builder.Configuration["MessageBroker:Password"]!);
-		});
-		config.ConfigureEndpoints(context);
-	});
-});
+//builder.Services.AddMassTransit(busConfigurator =>
+//{
+//	busConfigurator.SetKebabCaseEndpointNameFormatter();
+//	busConfigurator.UsingRabbitMq((context, config) =>
+//	{
+//		config.Host(new Uri(builder.Configuration["MessageBroker:Host"]!), h =>
+//		{
+//			h.Username(builder.Configuration["MessageBroker:Username"]!);
+//			h.Password(builder.Configuration["MessageBroker:Password"]!);
+//		});
+//		config.ConfigureEndpoints(context);
+//	});
+//});
 
 var app = builder.Build();
 
@@ -63,6 +64,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseAuthentication();
 app.UseAuthorization();
+//app.UseAntiforgery();
 app.MapCarter();
 app.UseExceptionHandler();
 

@@ -15,7 +15,7 @@ public class VerifyCodeEndpoint : CarterModule
 	{ }
 	public override void AddRoutes(IEndpointRouteBuilder app)
 	{
-		app.MapPost("/send-code", async (VerifyCodeRequest request, ISender sender) =>
+		app.MapPost("/verify-code", async (VerifyCodeRequest request, ISender sender) =>
 		{
 			var command = request.Adapt<VerifyCode.Command>();
 			var result = await sender.Send(command);
@@ -54,6 +54,7 @@ public class VerifyCode
 	{
 		public async Task<Result<bool>> Handle(Command request, CancellationToken cancellationToken)
 		{
+			var result = false;
 			var validationResult = await validator.ValidateAsync(request);
 			if (!validationResult.IsValid)
 			{
@@ -71,12 +72,16 @@ public class VerifyCode
 			{
 				return new Error("Invalid Code");
 			}
-			if (DateTime.UtcNow > user.CodeSentAtUtc?.AddMinutes(expiryTime))
+			var codeSentAt = user.CodeSentAtUtc?.AddMinutes(expiryTime)!;
+			if (DateTime.UtcNow > codeSentAt)
 			{
 				return new Error("Code Expired");
 			}
-
-			return true;
+			user.IsEmailVerified = true;
+			accountDbContext.Users.Update(user);
+			await accountDbContext.SaveChangesAsync(cancellationToken);
+			result = true;
+			return result;
 		}
 	}
 }

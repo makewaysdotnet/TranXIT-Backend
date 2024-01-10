@@ -15,20 +15,18 @@ public class UploadDocumentEndpoint : CarterModule
 	{ }
 	public override void AddRoutes(IEndpointRouteBuilder app)
 	{
-		app.MapPost("/upload", async (IFormFile request, ISender sender) =>
+		app.MapPost("/upload", async (IFormFile file, ISender sender) =>
 		{
-			var obj = new
-			{
-				File = request
-			};
-			var command = obj.Adapt<UploadDocument.Command>();
+			var command = new UploadDocument.Command { File = file };
 			var result = await sender.Send(command);
 			if (!result.isSuccess)
 			{
 				return Results.BadRequest(result);
 			}
 			return Results.Ok(result);
-		}).RequireAuthorization();
+		})
+		.RequireAuthorization()
+		.DisableAntiforgery();
 	}
 }
 public class UploadDocument
