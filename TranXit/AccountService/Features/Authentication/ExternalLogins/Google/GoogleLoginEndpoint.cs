@@ -37,6 +37,8 @@ public class AccountGoogleLogin
 		public string Name { get; set; } = string.Empty;
 		public string Email { get; set; } = string.Empty;
 		public string Image { get; set; } = string.Empty;
+		public int? RoleId { get; set; }
+		public string Phone { get; set; } = string.Empty;
 		public DateTime? Expires { get; set; } = null;
 		public ExternalLoginProviderEnum Provider { get; set; }
 	}
@@ -57,7 +59,7 @@ public class AccountGoogleLogin
 		}
 	}
 
-	internal sealed class Handler(AccountDbContext authDbContext,
+	internal sealed class Handler(AccountDbContext accountDbContext,
 		IValidator<Command> validator,
 		IJwtTokenBuilder jwtTokenBuilder,
 		IConfiguration configuration)
@@ -68,9 +70,9 @@ public class AccountGoogleLogin
 			var validationResult = await validator.ValidateAsync(request);
 			if (!validationResult.IsValid)
 			{
-				return new Error(validationResult.ToString()); //Error("Validation Error").WithError(validationResult.ToString());
+				return new Error(validationResult.ToString());
 			}
-			var user = await authDbContext
+			var user = await accountDbContext
 				.Users
 				.Include(x => x.Role)
 				.FirstOrDefaultAsync(x => x.Email == request.Email, cancellationToken);
@@ -84,8 +86,16 @@ public class AccountGoogleLogin
 					Provider = request.Provider.ToString(),
 					IsEmailVerified = true
 				};
-				await authDbContext.Users.AddAsync(user);
-				await authDbContext.SaveChangesAsync(cancellationToken);
+				await accountDbContext.Users.AddAsync(user);
+				await accountDbContext.SaveChangesAsync(cancellationToken);
+			}
+			else if(request.RoleId is not null)
+			{
+				user.RoleId = request.RoleId;
+				user.Phone = request.Phone;
+
+				accountDbContext.Users.Update(user);
+				await accountDbContext.SaveChangesAsync(cancellationToken);
 			}
 			var tokenBuilderRequest = new TokenBuilderRequest
 			{
@@ -107,6 +117,7 @@ public class AccountGoogleLogin
 				Role = user.Role is not null ? user.Role.Name! : null,
 				Provider = (ExternalLoginProviderEnum)Enum.Parse(typeof(ExternalLoginProviderEnum), user.Provider!),
 				IsEmailVerified = user.IsEmailVerified is null ? false : (bool)user.IsEmailVerified!,
+				Expires = DateTime.UtcNow.AddMinutes(tokenBuilderRequest.ExpiryMinutes).ToString(),
 				Token = token
 			};
 		}
