@@ -9,8 +9,12 @@
 		public int Generate6DRandomCode()
 		{
 			Random generator = new Random();
-			string r = generator.Next(0, 1000000).ToString("D6");
-			return Convert.ToInt32(r);
+			string randomNumber = generator.Next(0, 1000000).ToString("D6");
+			if (randomNumber.Length is 5)
+			{
+				randomNumber += "0";
+			}
+			return Convert.ToInt32(randomNumber);
 		}
 	}
 }

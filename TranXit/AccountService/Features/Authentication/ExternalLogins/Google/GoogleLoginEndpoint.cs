@@ -102,7 +102,7 @@ public class AccountGoogleLogin
 				Email = user.Email,
 				ExpiryMinutes = double.Parse(configuration["Jwt:ExpiryMinutes"]!),
 				Role = user.Role is not null ? user.Role.Name! : "",
-				SecretKey = configuration["JwtSecrets:Key"]!,
+				SecretKey = configuration["SharedJwtSecrets:Key"]!,
 				UserId = user!.Id.ToString(),
 				Username = user.Username,
 				EmailVerified = true

@@ -9,7 +9,8 @@ namespace SharedManager.Extensions
 {
 	public static class JwtExtensions
 	{
-		public static void AddJwtAuthentication(this IServiceCollection services)
+		public static void AddJwtAuthentication(this IServiceCollection services,
+			IConfiguration? masterConfiguration = default)
 		{
 			IConfiguration configuration = new ConfigurationBuilder()
 				.AddUserSecrets(Assembly.GetExecutingAssembly())
@@ -26,7 +27,7 @@ namespace SharedManager.Extensions
 							ValidateAudience = false,
 							IssuerSigningKey = new SymmetricSecurityKey(Encoding
 							.UTF8
-							.GetBytes(configuration["SharedJwtSecrets:Key"]!))
+							.GetBytes(masterConfiguration is not null ? masterConfiguration["SharedJwtSecrets:Key"]! : ""))
 						};
 					});
 		}

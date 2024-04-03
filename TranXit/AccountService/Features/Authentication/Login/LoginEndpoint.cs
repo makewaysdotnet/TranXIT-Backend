@@ -87,7 +87,7 @@ public class AccountLogin
 				Email = user.Email,
 				ExpiryMinutes = double.Parse(configuration["Jwt:ExpiryMinutes"]!),
 				Role = user.Role is not null ? user.Role.Name! : "",
-				SecretKey = configuration["JwtSecrets:Key"]!,
+				SecretKey = configuration["SharedJwtSecrets:Key"]!,
 				UserId = user!.Id.ToString(),
 				Username = user.Username,
 				EmailVerified = user.IsEmailVerified is null ? false : (bool)user.IsEmailVerified!,

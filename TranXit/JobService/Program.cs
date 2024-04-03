@@ -1,7 +1,6 @@
-using AccountService.Database;
-using AccountService.Features.Authentication.TokenManager;
 using Carter;
 using FluentValidation;
+using JobService.Database;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using SharedManager.Extensions;
@@ -16,20 +15,19 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-builder.Services.AddDbContext<AccountDbContext>(o =>
-	o.UseSqlServer(builder.Configuration.GetConnectionString("Database")));
+builder.Services.AddDbContext<JobDbContext>(o =>
+	o.UseLazyLoadingProxies()
+	 .UseSqlServer(builder.Configuration.GetConnectionString("Database")));
 builder.Services.Configure<MailSettings>(builder.Configuration.GetSection("MailSettings"));
 
 builder.Services.AddJwtAuthentication(builder.Configuration);
 builder.Services.AddAuthorization();
-//builder.Services.AddAntiforgery();
 
 
 var assembly = typeof(Program).Assembly;
 
 builder.Services.AddMediatR(config =>
 	config.RegisterServicesFromAssembly(assembly));
-builder.Services.AddScoped<IJwtTokenBuilder, JwtTokenBuilder>();
 builder.Services.AddScoped<IMailService, MailService>();
 builder.Services.AddScoped<IUtils, Utils>();
 
@@ -43,10 +41,6 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddMassTransit(busConfigurator =>
 {
 	busConfigurator.SetKebabCaseEndpointNameFormatter();
-	busConfigurator.AddConsumers(assembly);
-	busConfigurator.AddSagaStateMachines(assembly);
-	busConfigurator.AddSagas(assembly);
-	busConfigurator.AddActivities(assembly);
 	busConfigurator.UsingAmazonSqs((context, config) =>
 	{
 		config.Host(builder.Configuration["Aws:Region"], h =>
@@ -67,6 +61,7 @@ if (app.Environment.IsDevelopment())
 	app.UseSwagger();
 	app.UseSwaggerUI();
 }
+
 app.UseCors(options =>
 {
 	var origins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>();
@@ -83,7 +78,6 @@ app.UseCors(options =>
 
 app.UseAuthentication();
 app.UseAuthorization();
-//app.UseAntiforgery();
 app.MapCarter();
 app.UseExceptionHandler();
 

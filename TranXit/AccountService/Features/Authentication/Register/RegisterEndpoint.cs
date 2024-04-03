@@ -1,6 +1,5 @@
 ﻿using AccountService.Database;
 using AccountService.Features.Authentication.CommonResults;
-using AccountService.Features.Authentication.TokenManager;
 using Carter;
 using FluentValidation;
 using Mapster;
@@ -75,8 +74,6 @@ public class AccountRegister
 
 	internal sealed class Handler(AccountDbContext accountDbContext,
 		IValidator<Command> validator,
-		IConfiguration configuration,
-		IJwtTokenBuilder jwtTokenBuilder,
 		IUtils utils,
 		IMailService mailService)
 		: IRequestHandler<Command, Result<LoginResult>>
@@ -126,17 +123,7 @@ public class AccountRegister
 			accountDbContext.Users.Update(user);
 			await accountDbContext.SaveChangesAsync(cancellationToken);
 
-			var tokenBuilderRequest = new TokenBuilderRequest
-			{
-				Email = user.Email,
-				ExpiryMinutes = double.Parse(configuration["Jwt:ExpiryMinutes"]!),
-				Role = user.Role is not null ? user.Role.Name! : "",
-				SecretKey = configuration["JwtSecrets:Key"]!,
-				UserId = user!.Id.ToString(),
-				Username = user.Username,
-				EmailVerified = user.IsEmailVerified is null ? false : (bool)user.IsEmailVerified!,
-			};
-			var token = jwtTokenBuilder.BuildToken(tokenBuilderRequest);
+
 			return new LoginResult
 			{
 				Id = user.Id,
@@ -145,8 +132,6 @@ public class AccountRegister
 				RoleId = user.RoleId,
 				Role = user.Role is not null ? user.Role.Name! : null,
 				IsEmailVerified = user.IsEmailVerified is null ? false : (bool)user.IsEmailVerified!,
-				Expires = DateTime.UtcNow.AddMinutes(tokenBuilderRequest.ExpiryMinutes).ToString(),
-				Token = token
 			};
 		}
 	}
