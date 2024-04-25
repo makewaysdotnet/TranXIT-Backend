@@ -4,6 +4,7 @@ using Carter;
 using Mapster;
 using MediatR;
 using SharedServicesManager;
+using System.Net;
 
 namespace AccountService.Features.Roles.GetRole;
 
@@ -20,7 +21,9 @@ public class GetRoleEndpoint : CarterModule
 			var result = await sender.Send(query);
 
 			return Results.Ok(result);
-		}).RequireAuthorization();
+		}).RequireAuthorization()
+		.WithOpenApi()
+		.Produces<Result<RoleResult>>((int)HttpStatusCode.OK);
 	}
 }
 public class GetRole

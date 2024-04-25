@@ -4,6 +4,7 @@ using Carter;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using SharedServicesManager;
+using System.Net;
 
 namespace AccountService.Features.Roles.GetAllRoles;
 
@@ -19,7 +20,8 @@ public class GetRolesEndpoint : CarterModule
 			var result = await sender.Send(new GetAllRoles.Query());
 
 			return Results.Ok(result);
-		});
+		}).WithOpenApi()
+		.Produces<Result<List<RoleResult>>>((int)HttpStatusCode.OK);
 	}
 }
 public class GetAllRoles

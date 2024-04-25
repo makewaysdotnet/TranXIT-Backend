@@ -7,6 +7,7 @@ using Mapster;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using SharedServicesManager;
+using System.Net;
 
 namespace AccountService.Features.Authentication.Login;
 
@@ -26,8 +27,9 @@ public class LoginEndpoint : CarterModule
 				return Results.BadRequest(result);
 			}
 			return Results.Ok(result);
-		})
-			.WithName("Login");
+		}).WithOpenApi()
+		.Produces<Result<LoginResult>>((int)HttpStatusCode.OK)
+		.Produces<Result<LoginResult>>((int)HttpStatusCode.BadRequest);
 	}
 }
 

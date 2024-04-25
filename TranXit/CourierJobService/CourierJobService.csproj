@@ -1,11 +1,10 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <InvariantGlobalization>false</InvariantGlobalization>
-    <UserSecretsId>6469a012-123e-4d93-8067-fd048ac246c3</UserSecretsId>
+    <UserSecretsId>5d8233dc-499f-40fc-b546-65ff2e3d259c</UserSecretsId>
     <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
     <DockerComposeProjectPath>..\docker-compose.dcproj</DockerComposeProjectPath>
   </PropertyGroup>
@@ -18,6 +17,7 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Proxies" Version="8.0.4" />
     <Using Include="BCrypt.Net.BCrypt" Alias="BC" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.4" />
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.20.1" />
@@ -25,14 +25,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Features\Roles\CreateRole\" />
-    <Folder Include="Features\Roles\DeleteRole\" />
-    <Folder Include="Features\Roles\UpdateRole\" />
+    <ProjectReference Include="..\SharedManager\SharedManager.csproj" />
+    <ProjectReference Include="..\SharedServicesManager\SharedServicesManager.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\SharedManager\SharedManager.csproj" />
-    <ProjectReference Include="..\SharedServicesManager\SharedServicesManager.csproj" />
+    <Folder Include="Database\" />
   </ItemGroup>
 
 </Project>

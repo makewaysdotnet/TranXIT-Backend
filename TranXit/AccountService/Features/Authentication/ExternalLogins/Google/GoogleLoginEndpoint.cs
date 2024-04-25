@@ -7,6 +7,7 @@ using Mapster;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using SharedServicesManager;
+using System.Net;
 
 namespace AccountService.Features.Authentication.ExternalLogins.Google;
 
@@ -26,7 +27,9 @@ public class GoogleLoginEndpoint : CarterModule
 				return Results.BadRequest(result);
 			}
 			return Results.Ok(result);
-		});
+		}).WithOpenApi()
+		.Produces<Result<LoginResult>>((int)HttpStatusCode.OK)
+		.Produces<Result<LoginResult>>((int)HttpStatusCode.BadRequest);
 	}
 }
 
@@ -89,7 +92,7 @@ public class AccountGoogleLogin
 				await accountDbContext.Users.AddAsync(user);
 				await accountDbContext.SaveChangesAsync(cancellationToken);
 			}
-			else if(request.RoleId is not null)
+			else if (request.RoleId is not null)
 			{
 				user.RoleId = request.RoleId;
 				user.Phone = request.Phone;

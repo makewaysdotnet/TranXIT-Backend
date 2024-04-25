@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using SharedServicesManager;
 using SharedServicesManager.EmailService;
 using SharedServicesManager.Helpers;
+using System.Net;
 
 namespace AccountService.Features.Authentication.AccountVerification.SendCode;
 
@@ -26,7 +27,9 @@ public class SendCodeEndpoint : CarterModule
 				return Results.BadRequest(result);
 			}
 			return Results.Ok(result);
-		});
+		}).WithOpenApi()
+		.Produces<Result<bool>>((int)HttpStatusCode.OK)
+		.Produces<Result<bool>>((int)HttpStatusCode.BadRequest);
 	}
 }
 public class SendCode

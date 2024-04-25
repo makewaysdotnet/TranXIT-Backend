@@ -41,9 +41,11 @@ services:
   #       RABBITMQ_DEFAULT_USER: tranxit
   #       RABBITMQ_DEFAULT_PASS: tranxit
 
-  jobservice:
-    image: ${DOCKER_REGISTRY-}jobservice
+
+
+  courierjobservice:
+    image: ${DOCKER_REGISTRY-}courierjobservice
     build:
       context: .
-      dockerfile: JobService/Dockerfile
+      dockerfile: CourierJobService/Dockerfile
 

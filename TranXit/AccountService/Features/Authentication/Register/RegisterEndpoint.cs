@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using SharedServicesManager;
 using SharedServicesManager.EmailService;
 using SharedServicesManager.Helpers;
+using System.Net;
 
 namespace AccountService.Features.Authentication.Register;
 
@@ -27,9 +28,9 @@ public class RegisterEndpoint : CarterModule
 				return Results.BadRequest(result);
 			}
 			return Results.Ok(result);
-		})
-			.WithName("register")
-			.WithOpenApi();
+		}).WithOpenApi()
+		.Produces<Result<LoginResult>>((int)HttpStatusCode.OK)
+		.Produces<Result<LoginResult>>((int)HttpStatusCode.BadRequest);
 	}
 }
 
