@@ -81,5 +81,6 @@ app.UseAuthorization();
 //app.UseAntiforgery();
 app.MapCarter();
 app.UseExceptionHandler();
+app.MapHealthChecks("/courierjobservice");
 
 app.Run();

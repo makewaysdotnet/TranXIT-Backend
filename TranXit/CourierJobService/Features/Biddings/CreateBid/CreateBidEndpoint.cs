@@ -3,8 +3,10 @@ using CourierJobService.Database;
 using FluentValidation;
 using Mapster;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using SharedServicesManager;
 using SharedServicesManager.Helpers;
+using System.Net;
 
 namespace CourierJobService.Features.Biddings.CreateBid;
 
@@ -24,7 +26,10 @@ public class CreateBidEndpoint : CarterModule
 				return Results.BadRequest(result);
 			}
 			return Results.Created("/bids", result);
-		}).RequireAuthorization();
+		}).RequireAuthorization()
+		.WithOpenApi()
+		.Produces<Result<CreateBidResult>>((int)HttpStatusCode.OK)
+		.Produces<Result<CreateBidResult>>((int)HttpStatusCode.BadRequest);
 	}
 }
 public class CreateBid
@@ -39,7 +44,14 @@ public class CreateBid
 		public double? PickupCharges { get; set; }
 		public double? HandlingCharges { get; set; }
 		public double? CustomClearanceCharges { get; set; }
+		public IEnumerable<BidChargesCommand> BidCustomCharges { get; set; } = Enumerable.Empty<BidChargesCommand>();
 		public IEnumerable<BidProposalCommand> BidProposals { get; set; } = Enumerable.Empty<BidProposalCommand>();
+	}
+	public class BidChargesCommand
+	{
+		public string? Name { get; set; }
+		public string? Description { get; set; }
+		public double? Amount { get; set; }
 	}
 	public class BidProposalCommand
 	{
@@ -79,7 +91,14 @@ public class CreateBid
 				return new Error(validationResult.ToString());
 			}
 			request.UserId = HttpContextUser.GetCurrentUserId(httpContext);
-			var createdBid = new Bidding
+			var createdBid = await jobDbContext.Biddings
+				.FirstOrDefaultAsync(x => x.JobId == request.JobId && x.UserId == request.UserId,
+				cancellationToken);
+			if (createdBid is not null)
+			{
+				return new Error("Bid already exists");
+			}
+			createdBid = new Bidding
 			{
 				JobId = request.JobId,
 				UserId = request.UserId,
@@ -88,6 +107,12 @@ public class CreateBid
 				HandlingCharges = request.HandlingCharges,
 				CustomClearanceCharges = request.CustomClearanceCharges,
 				TotalAmount = request.TotalAmount,
+				BiddingCharges = request.BidCustomCharges.Select(x => new BiddingCharge
+				{
+					Amount = x.Amount,
+					Description = x.Description,
+					Name = x.Name
+				}).ToList(),
 				BiddingProposals = request.BidProposals.Select(x => new BiddingProposal
 				{
 					IsBaseBid = x.IsBaseBid,
