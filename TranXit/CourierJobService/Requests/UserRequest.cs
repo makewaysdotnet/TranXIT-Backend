@@ -1,7 +1,6 @@
 ﻿using MassTransit;
 using SharedServicesManager.Contracts.User;
 using SharedServicesManager.Helpers;
-using System.Security.Claims;
 
 namespace CourierJobService.Requests
 {

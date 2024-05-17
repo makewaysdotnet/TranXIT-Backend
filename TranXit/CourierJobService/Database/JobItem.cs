@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace CourierJobService.Database;
+﻿namespace CourierJobService.Database;
 
 public partial class JobItem
 {
@@ -23,7 +20,11 @@ public partial class JobItem
 
     public int? JobId { get; set; }
 
+    public int? ItemTypeId { get; set; }
+
     public virtual ICollection<BiddingProposalItem> BiddingProposalItems { get; set; } = new List<BiddingProposalItem>();
+
+    public virtual ItemType? ItemType { get; set; }
 
     public virtual Job? Job { get; set; }
 }

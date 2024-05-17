@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace CourierJobService.Database;
+﻿namespace CourierJobService.Database;
 
 public partial class BiddingCharge
 {

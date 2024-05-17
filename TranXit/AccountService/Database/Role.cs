@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace AccountService.Database;
+﻿namespace AccountService.Database;
 
 public partial class Role
 {

@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace CourierJobService.Database;
+﻿namespace CourierJobService.Database;
 
 public partial class Job
 {
@@ -34,6 +31,12 @@ public partial class Job
     public int? CourierModeId { get; set; }
 
     public string? JobNumber { get; set; }
+
+    public string? RecipientName { get; set; }
+
+    public string? RecipientContact { get; set; }
+
+    public string? RecipientEmail { get; set; }
 
     public virtual ICollection<Bidding> Biddings { get; set; } = new List<Bidding>();
 

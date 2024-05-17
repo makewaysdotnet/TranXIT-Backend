@@ -31,6 +31,8 @@ public partial class CourierJobDbContext : DbContext
 
 	public virtual DbSet<DeliveryType> DeliveryTypes { get; set; }
 
+	public virtual DbSet<ItemType> ItemTypes { get; set; }
+
 	public virtual DbSet<Job> Jobs { get; set; }
 
 	public virtual DbSet<JobItem> JobItems { get; set; }
@@ -127,6 +129,13 @@ public partial class CourierJobDbContext : DbContext
 				.IsUnicode(false);
 		});
 
+		modelBuilder.Entity<ItemType>(entity =>
+		{
+			entity.Property(e => e.Name)
+				.HasMaxLength(50)
+				.IsUnicode(false);
+		});
+
 		modelBuilder.Entity<Job>(entity =>
 		{
 			entity.HasIndex(e => e.JobNumber, "IX_Jobs").IsUnique();
@@ -143,6 +152,15 @@ public partial class CourierJobDbContext : DbContext
 				.HasMaxLength(500)
 				.IsUnicode(false);
 			entity.Property(e => e.PickupDateUtc).HasColumnType("datetime");
+			entity.Property(e => e.RecipientContact)
+				.HasMaxLength(50)
+				.IsUnicode(false);
+			entity.Property(e => e.RecipientEmail)
+				.HasMaxLength(100)
+				.IsUnicode(false);
+			entity.Property(e => e.RecipientName)
+				.HasMaxLength(250)
+				.IsUnicode(false);
 
 			entity.HasOne(d => d.CargoMode).WithMany(p => p.Jobs)
 				.HasForeignKey(d => d.CargoModeId)
@@ -185,6 +203,10 @@ public partial class CourierJobDbContext : DbContext
 			entity.Property(e => e.Name)
 				.HasMaxLength(50)
 				.IsUnicode(false);
+
+			entity.HasOne(d => d.ItemType).WithMany(p => p.JobItems)
+				.HasForeignKey(d => d.ItemTypeId)
+				.HasConstraintName("FK_JobItems_ItemTypes");
 
 			entity.HasOne(d => d.Job).WithMany(p => p.JobItems)
 				.HasForeignKey(d => d.JobId)

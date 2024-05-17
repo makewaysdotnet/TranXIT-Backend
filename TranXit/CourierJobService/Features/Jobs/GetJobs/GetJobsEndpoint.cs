@@ -53,16 +53,17 @@ public class GetJob
 				.Select(x => new JobResult
 				{
 					Id = x.Id,
+					CustomerId = x.UserId,
 					CreatedOnUtc = x.CreatedOnUtc,
 					OriginCountry = x.OriginCountry!.CountryName,
 					DestinationCountry = x.DestinationCountry!.CountryName,
 					Status = x.JobStatus!.Status,
 					StatusId = x.JobStatusId,
+					JobNumber = x.JobNumber,
 					MaxBid = x.Biddings.Max(y => y.TotalAmount),
 					MinBid = x.Biddings.Min(y => y.TotalAmount),
 					YourBid = x.Biddings.FirstOrDefault(y => y.UserId == request.UserId)!.TotalAmount
 				})
-				.AsSplitQuery()
 				.AsNoTracking();
 			if (jobsQuery is null)
 			{

@@ -1,8 +1,11 @@
-﻿namespace SharedServicesManager.Helpers
+﻿using RandomString4Net;
+
+namespace SharedServicesManager.Helpers
 {
 	public interface IUtils
 	{
 		int Generate6DRandomCode();
+		string GenerateJobNumber();
 	}
 	public class Utils : IUtils
 	{
@@ -15,6 +18,11 @@
 				randomNumber += "0";
 			}
 			return Convert.ToInt32(randomNumber);
+		}
+
+		public string GenerateJobNumber()
+		{
+			return RandomString.GetString(Types.ALPHANUMERIC_LOWERCASE, 8);
 		}
 	}
 }

@@ -1,10 +1,10 @@
 ﻿namespace CourierJobService.Database;
 
-public partial class CargoMode
+public partial class ItemType
 {
     public int Id { get; set; }
 
     public string? Name { get; set; }
 
-    public virtual ICollection<Job> Jobs { get; set; } = new List<Job>();
+    public virtual ICollection<JobItem> JobItems { get; set; } = new List<JobItem>();
 }
