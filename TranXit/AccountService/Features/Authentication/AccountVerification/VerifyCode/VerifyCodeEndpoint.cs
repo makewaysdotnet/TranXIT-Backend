@@ -5,6 +5,7 @@ using Mapster;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using SharedServicesManager;
+using System.Net;
 
 namespace AccountService.Features.Authentication.AccountVerification.VerifyCode;
 
@@ -24,7 +25,10 @@ public class VerifyCodeEndpoint : CarterModule
 				return Results.BadRequest(result);
 			}
 			return Results.Ok(result);
-		});
+		}).WithOpenApi()
+		.WithTags("Auth")
+		.Produces<Result<bool>>((int)HttpStatusCode.OK)
+		.Produces<Result<bool>>((int)HttpStatusCode.BadRequest);
 	}
 }
 public class VerifyCode

@@ -147,6 +147,7 @@ public partial class CourierJobDbContext : DbContext
 			entity.Property(e => e.DestinationAddress)
 				.HasMaxLength(500)
 				.IsUnicode(false);
+			entity.Property(e => e.ExpiryDateUtc).HasColumnType("datetime");
 			entity.Property(e => e.JobNumber).HasMaxLength(10);
 			entity.Property(e => e.OriginAddress)
 				.HasMaxLength(500)

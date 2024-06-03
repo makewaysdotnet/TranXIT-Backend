@@ -28,7 +28,8 @@ public class GetJobsEndpoint : CarterModule
 			var result = await sender.Send(query);
 
 			return Results.Ok(result);
-		}).RequireAuthorization()
+		}).RequireAuthorization("CourierPolicy")
+		.WithTags("Jobs")
 		.WithOpenApi()
 		.Produces<Result<Pagination<JobResult>>>((int)HttpStatusCode.OK)
 		.Produces<Result<Pagination<JobResult>>>((int)HttpStatusCode.BadRequest);
@@ -48,6 +49,7 @@ public class GetJob
 		public async Task<Result<Pagination<JobResult>>> Handle(Query request,
 			CancellationToken cancellationToken)
 		{
+			var currentTime = DateTime.UtcNow;
 			var jobsQuery = jobDbContext.Jobs
 				.OrderByDescending(x => x.CreatedOnUtc)
 				.Select(x => new JobResult
@@ -57,14 +59,20 @@ public class GetJob
 					CreatedOnUtc = x.CreatedOnUtc,
 					OriginCountry = x.OriginCountry!.CountryName,
 					DestinationCountry = x.DestinationCountry!.CountryName,
+					OriginCity = x.OriginCity!.CityName,
+					DestinationCity = x.DestinationCity!.CityName,
 					Status = x.JobStatus!.Status,
 					StatusId = x.JobStatusId,
 					JobNumber = x.JobNumber,
 					MaxBid = x.Biddings.Max(y => y.TotalAmount),
 					MinBid = x.Biddings.Min(y => y.TotalAmount),
-					YourBid = x.Biddings.FirstOrDefault(y => y.UserId == request.UserId)!.TotalAmount
+					YourBid = x.Biddings.FirstOrDefault(y => y.UserId == request.UserId)!.TotalAmount,
+					RemainingTime = x.ExpiryDateUtc.HasValue &&
+					(x.ExpiryDateUtc - currentTime)!.Value.TotalSeconds > 0 ?
+					(x.ExpiryDateUtc - currentTime)!.Value.TotalSeconds : 0
 				})
-				.AsNoTracking();
+				.AsNoTracking()
+				.AsQueryable();
 			if (jobsQuery is null)
 			{
 				return new Error("Jobs not found");

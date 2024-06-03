@@ -28,6 +28,7 @@ public class LoginEndpoint : CarterModule
 			}
 			return Results.Ok(result);
 		}).WithOpenApi()
+		.WithTags("Auth")
 		.Produces<Result<LoginResult>>((int)HttpStatusCode.OK)
 		.Produces<Result<LoginResult>>((int)HttpStatusCode.BadRequest);
 	}

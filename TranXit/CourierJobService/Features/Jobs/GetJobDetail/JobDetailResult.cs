@@ -8,6 +8,13 @@
         public string CustomerName { get; set; } = string.Empty;
         public string CourierMode { get; init; } = string.Empty;
         public string CargoMode { get; init; } = string.Empty;
+        public string? OriginCity { get; init; }
+        public string? DestinationCity { get; init; }
+        public string? OriginCountry { get; init; }
+        public string? DestinationCountry { get; init; }
+        public string? JobNumber { get; init; }
+        public DateTime? PickupDateUtc { get; init; }
+        public string? Status { get; init; }
         public IEnumerable<JobItemResult> JobItems { get; init; } = [];
     }
     public class JobItemResult

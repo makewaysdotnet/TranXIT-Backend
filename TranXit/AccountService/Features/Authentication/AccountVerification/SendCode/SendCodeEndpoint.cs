@@ -28,6 +28,7 @@ public class SendCodeEndpoint : CarterModule
 			}
 			return Results.Ok(result);
 		}).WithOpenApi()
+		.WithTags("Auth")
 		.Produces<Result<bool>>((int)HttpStatusCode.OK)
 		.Produces<Result<bool>>((int)HttpStatusCode.BadRequest);
 	}

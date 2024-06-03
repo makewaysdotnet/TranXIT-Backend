@@ -2,7 +2,7 @@
 {
 	public enum ExternalLoginProviderEnum
 	{
-		Google = 0, 
+		Google = 0,
 		Facebook = 1
 	}
 }

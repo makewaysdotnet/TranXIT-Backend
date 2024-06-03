@@ -3,6 +3,7 @@ using CourierJobService.Database;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using SharedServicesManager;
+using SharedServicesManager.Helpers;
 using System.Net;
 
 namespace CourierJobService.Features.Jobs.GetJob;
@@ -14,13 +15,21 @@ public class GetJobEndpoint : CarterModule
 	{ }
 	public override void AddRoutes(IEndpointRouteBuilder app)
 	{
-		app.MapGet("/jobs/{customerId:int}", async (int customerId, ISender sender) =>
+		app.MapGet("/jobs/{customerId:int}", async (int customerId,
+			ISender sender,
+			IHttpContextAccessor httpContext) =>
 		{
+			var userId = HttpContextUser.GetCurrentUserId(httpContext);
+			if (!userId.Equals(customerId))
+			{
+				return Results.Unauthorized();
+			}
 			var query = new GetJob.Query { UserId = customerId };
 			var result = await sender.Send(query);
 
 			return Results.Ok(result);
-		}).RequireAuthorization()
+		}).RequireAuthorization("CustomerPolicy")
+		.WithTags("Jobs")
 		.WithOpenApi()
 		.Produces<Result<List<CustomerJobResult>>>((int)HttpStatusCode.OK);
 	}
@@ -54,6 +63,7 @@ public class GetJob
 					Status = x.JobStatus!.Status,
 				})
 				.Where(x => x.CustomerId == request.UserId)
+				.AsSplitQuery()
 				.OrderByDescending(x => x.CreatedOnUtc)
 				.ToListAsync(cancellationToken);
 

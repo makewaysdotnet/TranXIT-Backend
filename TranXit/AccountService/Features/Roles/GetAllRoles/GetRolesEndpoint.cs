@@ -21,6 +21,7 @@ public class GetRolesEndpoint : CarterModule
 
 			return Results.Ok(result);
 		}).WithOpenApi()
+		.WithTags("Roles")
 		.Produces<Result<List<RoleResult>>>((int)HttpStatusCode.OK);
 	}
 }
@@ -38,6 +39,8 @@ public class GetAllRoles
 			{
 				Id = x.Id,
 				Name = x.Name
-			}).ToListAsync(cancellationToken);
+			})
+			.AsNoTracking()
+			.ToListAsync(cancellationToken);
 	}
 }

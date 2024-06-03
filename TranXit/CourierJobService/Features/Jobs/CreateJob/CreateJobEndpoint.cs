@@ -25,7 +25,8 @@ public class CreateJobEndpoint : CarterModule
 				return Results.BadRequest(result);
 			}
 			return Results.Created("/jobs", result);
-		}).RequireAuthorization()
+		}).RequireAuthorization("CustomerPolicy")
+		.WithTags("Jobs")
 		.WithOpenApi()
 		.Produces<Result<CreateJobResult>>((int)HttpStatusCode.OK)
 		.Produces<Result<CreateJobResult>>((int)HttpStatusCode.BadRequest);
@@ -51,6 +52,7 @@ public class CreateJob
 		public string RecipientName { get; init; } = string.Empty;
 		public string RecipientEmail { get; init; } = string.Empty;
 		public DateTime? PickupDateUtc { get; init; }
+		public DateTime? ExpiryDateUtc { get; init; }
 		public IEnumerable<JobItemCommand> JobItems { get; set; } = Enumerable.Empty<JobItemCommand>();
 
 	}
@@ -84,6 +86,7 @@ public class CreateJob
 	internal sealed class Handler(CourierJobDbContext jobDbContext,
 		IValidator<Command> validator,
 		IHttpContextAccessor httpContext,
+		IConfiguration configuration,
 		IUtils utils)
 		: IRequestHandler<Command, Result<CreateJobResult>>
 	{
@@ -109,6 +112,9 @@ public class CreateJob
 				OriginCountryId = request.OriginCountryId,
 				OriginCityId = request.OriginCityId,
 				JobNumber = utils.GenerateJobNumber(),
+				ExpiryDateUtc = request.ExpiryDateUtc.HasValue ?
+					request.ExpiryDateUtc :
+					DateTime.UtcNow.AddMinutes(double.Parse(configuration["Jobs:ExpiryTimeInMinutes"]!)),
 				JobItems = request.JobItems.Select(x => new JobItem
 				{
 					DeclaredValue = x.DeclaredValue,

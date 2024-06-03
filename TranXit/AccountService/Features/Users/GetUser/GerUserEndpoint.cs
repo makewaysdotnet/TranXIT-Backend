@@ -21,6 +21,7 @@ public class GetUserEndpoint : CarterModule
 
 			return Results.Ok(result);
 		}).RequireAuthorization()
+		.WithTags("Users")
 		.WithOpenApi()
 		.Produces<Result<UserResult>>((int)HttpStatusCode.OK);
 	}

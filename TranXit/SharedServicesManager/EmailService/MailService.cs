@@ -23,7 +23,7 @@ public class MailService(IOptions<MailSettings> mailSettings) : IMailService
 				{
 					emailMessage.To.Add(MailboxAddress.Parse(emailAddress));
 				}
-				
+
 
 				//emailMessage.Cc.Add(new MailboxAddress("Cc Receiver", "cc@example.com"));
 				//emailMessage.Bcc.Add(new MailboxAddress("Bcc Receiver", "bcc@example.com"));

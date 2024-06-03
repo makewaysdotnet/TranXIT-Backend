@@ -3,6 +3,7 @@ using Carter;
 using FluentValidation;
 using MediatR;
 using SharedServicesManager;
+using System.Net;
 using System.Security.Claims;
 
 namespace AccountService.Features.AccountDocuments.UploadDocument;
@@ -25,7 +26,11 @@ public class UploadDocumentEndpoint : CarterModule
 			return Results.Ok(result);
 		})
 		.RequireAuthorization()
-		.DisableAntiforgery();
+		.DisableAntiforgery()
+		.WithOpenApi()
+		.WithTags("Auth")
+		.Produces<Result<int>>((int)HttpStatusCode.OK)
+		.Produces<Result<int>>((int)HttpStatusCode.BadRequest);
 	}
 }
 public class UploadDocument

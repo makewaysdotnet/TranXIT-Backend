@@ -22,6 +22,7 @@ public class GetRoleEndpoint : CarterModule
 
 			return Results.Ok(result);
 		}).RequireAuthorization()
+		.WithTags("Roles")
 		.WithOpenApi()
 		.Produces<Result<RoleResult>>((int)HttpStatusCode.OK);
 	}

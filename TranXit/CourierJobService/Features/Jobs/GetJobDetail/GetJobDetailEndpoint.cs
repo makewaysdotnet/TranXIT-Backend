@@ -16,18 +16,18 @@ public class GetJobDetailEndpoint : CarterModule
 	{ }
 	public override void AddRoutes(IEndpointRouteBuilder app)
 	{
-		app.MapGet("/job-details/{jobId:int}", async (int jobId,
-			ISender sender,
-			IBus messageBus) =>
+		app.MapGet("/jobs/{jobId:int}/details", async (int jobId,
+			ISender sender) =>
 		{
-			var query = new GetJobDetail.Query { jobId = jobId, messageBus = messageBus };
+			var query = new GetJobDetail.Query { jobId = jobId };
 			var result = await sender.Send(query);
 			if (!result.isSuccess)
 			{
 				return Results.BadRequest(result);
 			}
 			return Results.Ok(result);
-		}).RequireAuthorization()
+		}).RequireAuthorization(["CourierPolicy", "CustomerPolicy"])
+		.WithTags("Jobs")
 		.WithOpenApi()
 		.Produces<Result<JobDetailResult>>((int)HttpStatusCode.OK)
 		.Produces<Result<JobDetailResult>>((int)HttpStatusCode.BadRequest);
@@ -38,9 +38,8 @@ public class GetJobDetail
 	public sealed class Query : IRequest<Result<JobDetailResult>>
 	{
 		public required int jobId { get; set; }
-		public required IBus messageBus { get; set; }
 	}
-	internal sealed class QueryHandler(CourierJobDbContext jobDbContext)
+	internal sealed class QueryHandler(CourierJobDbContext jobDbContext, IBus messageBus)
 		: IRequestHandler<Query, Result<JobDetailResult>>
 	{
 		public async Task<Result<JobDetailResult>> Handle(Query request,
@@ -54,6 +53,13 @@ public class GetJobDetail
 					DestinationAddress = x.DestinationAddress!,
 					CargoMode = x.CargoMode!.Name!,
 					CourierMode = x.CourierMode!.Name!,
+					OriginCountry = x.OriginCountry!.CountryName,
+					DestinationCountry = x.DestinationCountry!.CountryName,
+					OriginCity = x.OriginCity!.CityName,
+					DestinationCity = x.DestinationCity!.CityName,
+					PickupDateUtc = x.PickupDateUtc,
+					JobNumber = x.JobNumber,
+					Status = x.JobStatus!.Status,
 					JobItems = x.JobItems!.Select(y => new JobItemResult
 					{
 						JobItemId = y.Id,
@@ -72,7 +78,7 @@ public class GetJobDetail
 			{
 				return new Error("Job Detail not found");
 			}
-			var userResult = await UserRequest.GetUserAsync(jobDetailResponse!.UserId, request.messageBus);
+			var userResult = await UserRequest.GetUserAsync(jobDetailResponse!.UserId, messageBus);
 			if (userResult is null)
 			{
 				return new Error("User not found");

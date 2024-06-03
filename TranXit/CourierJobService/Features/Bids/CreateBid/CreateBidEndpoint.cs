@@ -8,7 +8,7 @@ using SharedServicesManager;
 using SharedServicesManager.Helpers;
 using System.Net;
 
-namespace CourierJobService.Features.Biddings.CreateBid;
+namespace CourierJobService.Features.Bids.CreateBid;
 
 public class CreateBidEndpoint : CarterModule
 {
@@ -26,7 +26,8 @@ public class CreateBidEndpoint : CarterModule
 				return Results.BadRequest(result);
 			}
 			return Results.Created("/bids", result);
-		}).RequireAuthorization()
+		}).RequireAuthorization("CourierPolicy")
+		.WithTags("Bids")
 		.WithOpenApi()
 		.Produces<Result<CreateBidResult>>((int)HttpStatusCode.OK)
 		.Produces<Result<CreateBidResult>>((int)HttpStatusCode.BadRequest);
@@ -39,11 +40,21 @@ public class CreateBid
 	{
 		public required int JobId { get; set; }
 		public int UserId { get; set; }
-		public double TotalAmount { get; set; }
+		public double? TotalAmount
+		{
+			get
+			{
+				return PickupCharges +
+					HandlingCharges +
+					CustomClearanceCharges +
+					BidCustomCharges?.Sum(x => x.Amount) +
+					BidProposals.Single(x => x.IsBaseBid == true)?.Total;
+			}
+		}
 		public bool? IsInsurancePolicy { get; set; }
-		public double? PickupCharges { get; set; }
-		public double? HandlingCharges { get; set; }
-		public double? CustomClearanceCharges { get; set; }
+		public double PickupCharges { get; set; } = 0;
+		public double HandlingCharges { get; set; } = 0;
+		public double CustomClearanceCharges { get; set; } = 0;
 		public IEnumerable<BidChargesCommand> BidCustomCharges { get; set; } = Enumerable.Empty<BidChargesCommand>();
 		public IEnumerable<BidProposalCommand> BidProposals { get; set; } = Enumerable.Empty<BidProposalCommand>();
 	}
@@ -51,21 +62,21 @@ public class CreateBid
 	{
 		public string? Name { get; set; }
 		public string? Description { get; set; }
-		public double? Amount { get; set; }
+		public double Amount { get; set; } = 0;
 	}
 	public class BidProposalCommand
 	{
 		public int? DeliveryTypeId { get; set; }
 		public bool? IsBaseBid { get; set; }
 		public DateTime? DeliveryDate { get; set; }
-		public double? Total { get; set; }
+		public double Total { get; set; } = 0;
 		public IEnumerable<BidProposalItemCommand> BidProposalItems { get; set; } = Enumerable.Empty<BidProposalItemCommand>();
 	}
 	public record BidProposalItemCommand
 	{
 		public int? JobItemId { get; set; }
-		public double? UnitPrice { get; set; }
-		public double? ItemTotal { get; set; }
+		public double UnitPrice { get; set; } = 0;
+		public double ItemTotal { get; set; } = 0;
 
 	}
 	#endregion
@@ -106,7 +117,7 @@ public class CreateBid
 				PickupCharges = request.PickupCharges,
 				HandlingCharges = request.HandlingCharges,
 				CustomClearanceCharges = request.CustomClearanceCharges,
-				TotalAmount = request.TotalAmount,
+				TotalAmount = request.TotalAmount is not null ? (double)request.TotalAmount : 0,
 				BiddingCharges = request.BidCustomCharges.Select(x => new BiddingCharge
 				{
 					Amount = x.Amount,

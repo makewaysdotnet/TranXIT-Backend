@@ -21,7 +21,11 @@ builder.Services.AddDbContext<AccountDbContext>(o =>
 builder.Services.Configure<MailSettings>(builder.Configuration.GetSection("MailSettings"));
 
 builder.Services.AddJwtAuthentication(builder.Configuration);
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+	options.AddPolicy("CourierPolicy", policy => policy.RequireRole("Courier"));
+	options.AddPolicy("CustomerPolicy", policy => policy.RequireRole("Customer"));
+});
 //builder.Services.AddAntiforgery();
 
 
@@ -86,5 +90,6 @@ app.UseAuthorization();
 //app.UseAntiforgery();
 app.MapCarter();
 app.UseExceptionHandler();
+app.MapHealthChecks("/");
 
 app.Run();

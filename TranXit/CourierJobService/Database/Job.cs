@@ -38,6 +38,8 @@ public partial class Job
 
     public string? RecipientEmail { get; set; }
 
+    public DateTime? ExpiryDateUtc { get; set; }
+
     public virtual ICollection<Bidding> Biddings { get; set; } = new List<Bidding>();
 
     public virtual CargoMode? CargoMode { get; set; }
