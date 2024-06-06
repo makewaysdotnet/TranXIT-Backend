@@ -1,6 +1,5 @@
 ﻿using Carter;
 using CourierJobService.Database;
-using CourierJobService.Features.Jobs.GetJobs;
 using CourierJobService.Requests;
 using MassTransit;
 using MediatR;
@@ -57,13 +56,16 @@ public class GetJobUserBids
 			CancellationToken cancellationToken)
 		{
 			var bidsQuery = jobDbContext.Biddings
-				.Where(x => x.JobId == request.JobId && x.UserId == request.UserId)
+				.Include(x => x.Job)
+				.Where(x => x.JobId == request.JobId && x.Job.UserId == request.UserId)
+				.AsSplitQuery()
+				.AsNoTracking()
 				.Select(x => new JobUserBidResult
 				{
 					BidId = x.Id,
-					CourierId = x.UserId
+					BidMinOffer = x.TotalAmount,
+					CourierId = x.UserId,
 				})
-				.AsNoTracking()
 				.AsQueryable();
 			if (bidsQuery is null)
 			{

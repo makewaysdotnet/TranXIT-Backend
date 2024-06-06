@@ -1,5 +1,7 @@
 ﻿using Carter;
 using CourierJobService.Database;
+using CourierJobService.Enums;
+using CourierJobService.Helpers;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using SharedServicesManager;
@@ -52,6 +54,14 @@ public class GetJob
 			var currentTime = DateTime.UtcNow;
 			var jobsQuery = jobDbContext.Jobs
 				.OrderByDescending(x => x.CreatedOnUtc)
+				.Include(x => x.OriginCountry)
+				.Include(x => x.OriginCity)
+				.Include(x => x.DestinationCountry)
+				.Include(x => x.DestinationCity)
+				.Include(x => x.JobStatus)
+				.Include(x => x.Biddings).ThenInclude(y => y.JobStatus)
+				.AsSplitQuery()
+				.AsNoTracking()
 				.Select(x => new JobResult
 				{
 					Id = x.Id,
@@ -61,7 +71,7 @@ public class GetJob
 					DestinationCountry = x.DestinationCountry!.CountryName,
 					OriginCity = x.OriginCity!.CityName,
 					DestinationCity = x.DestinationCity!.CityName,
-					Status = x.JobStatus!.Status,
+					Status = JobsHelper.GetJobStatus(x, x.Biddings, request.UserId),
 					StatusId = x.JobStatusId,
 					JobNumber = x.JobNumber,
 					MaxBid = x.Biddings.Max(y => y.TotalAmount),
@@ -70,9 +80,8 @@ public class GetJob
 					RemainingTime = x.ExpiryDateUtc.HasValue &&
 					(x.ExpiryDateUtc - currentTime)!.Value.TotalSeconds > 0 ?
 					(x.ExpiryDateUtc - currentTime)!.Value.TotalSeconds : 0
-				})
-				.AsNoTracking()
-				.AsQueryable();
+				});
+
 			if (jobsQuery is null)
 			{
 				return new Error("Jobs not found");

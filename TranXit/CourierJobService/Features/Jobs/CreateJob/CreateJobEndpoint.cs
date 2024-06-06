@@ -1,11 +1,14 @@
 ﻿using Carter;
 using CourierJobService.Database;
+using CourierJobService.Features.Jobs.Shared;
 using FluentValidation;
 using Mapster;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using SharedServicesManager;
 using SharedServicesManager.Helpers;
 using System.Net;
+using JobStatusEnum = CourierJobService.Enums.JobStatusEnum;
 
 namespace CourierJobService.Features.Jobs.CreateJob;
 
@@ -28,15 +31,15 @@ public class CreateJobEndpoint : CarterModule
 		}).RequireAuthorization("CustomerPolicy")
 		.WithTags("Jobs")
 		.WithOpenApi()
-		.Produces<Result<CreateJobResult>>((int)HttpStatusCode.OK)
-		.Produces<Result<CreateJobResult>>((int)HttpStatusCode.BadRequest);
+		.Produces<Result<CreateUpdateJobResult>>((int)HttpStatusCode.Created)
+		.Produces<Result<CreateUpdateJobResult>>((int)HttpStatusCode.BadRequest);
 	}
 }
 
 public class CreateJob
 {
 	#region Command
-	public class Command : IRequest<Result<CreateJobResult>>
+	public class Command : IRequest<Result<CreateUpdateJobResult>>
 	{
 		public int CourierModeId { get; set; }
 		public int UserId { get; set; }
@@ -88,9 +91,9 @@ public class CreateJob
 		IHttpContextAccessor httpContext,
 		IConfiguration configuration,
 		IUtils utils)
-		: IRequestHandler<Command, Result<CreateJobResult>>
+		: IRequestHandler<Command, Result<CreateUpdateJobResult>>
 	{
-		public async Task<Result<CreateJobResult>> Handle(Command request, CancellationToken cancellationToken)
+		public async Task<Result<CreateUpdateJobResult>> Handle(Command request, CancellationToken cancellationToken)
 		{
 			var validationResult = await validator.ValidateAsync(request);
 			if (!validationResult.IsValid)
@@ -98,7 +101,9 @@ public class CreateJob
 				return new Error(validationResult.ToString());
 			}
 			request.UserId = HttpContextUser.GetCurrentUserId(httpContext);
-
+			var jobStatusId = jobDbContext.JobStatuses
+				.AsNoTracking()
+				.SingleOrDefault(x => x.Status == JobStatusEnum.Open.ToString())?.Id;
 			var createdJob = new Job
 			{
 				UserId = request.UserId,
@@ -112,6 +117,10 @@ public class CreateJob
 				OriginCountryId = request.OriginCountryId,
 				OriginCityId = request.OriginCityId,
 				JobNumber = utils.GenerateJobNumber(),
+				JobStatusId = jobStatusId,
+				RecipientContact = request.RecipientContact,
+				RecipientEmail = request.RecipientEmail,
+				RecipientName = request.RecipientName,
 				ExpiryDateUtc = request.ExpiryDateUtc.HasValue ?
 					request.ExpiryDateUtc :
 					DateTime.UtcNow.AddMinutes(double.Parse(configuration["Jobs:ExpiryTimeInMinutes"]!)),
@@ -129,7 +138,7 @@ public class CreateJob
 
 			await jobDbContext.Jobs.AddAsync(createdJob);
 			await jobDbContext.SaveChangesAsync();
-			return new CreateJobResult { JobId = createdJob.Id };
+			return new CreateUpdateJobResult { JobId = createdJob.Id };
 		}
 	}
 }

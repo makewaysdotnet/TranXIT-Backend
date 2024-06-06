@@ -1,5 +1,6 @@
 ﻿using Carter;
 using CourierJobService.Database;
+using CourierJobService.Helpers;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using SharedServicesManager;
@@ -47,6 +48,16 @@ public class GetJob
 			CancellationToken cancellationToken)
 		{
 			var jobResponse = await jobDbContext.Jobs
+				.Where(x => x.UserId == request.UserId)
+				.OrderByDescending(x => x.CreatedOnUtc)
+				.Include(x => x.DestinationCity)
+				.Include(x => x.DestinationCountry)
+				.Include(x => x.OriginCity)
+				.Include(x => x.OriginCountry)
+				.Include(x => x.JobStatus)
+				.Include(x => x.Biddings).ThenInclude(y => y.JobStatus)
+				.AsSplitQuery()
+				.AsNoTracking()
 				.Select(x => new CustomerJobResult
 				{
 					Id = x.Id,
@@ -60,11 +71,8 @@ public class GetJob
 					OriginAddress = x.OriginAddress,
 					DestinationAddress = x.DestinationAddress,
 					StatusId = x.JobStatusId,
-					Status = x.JobStatus!.Status,
+					Status = JobsHelper.GetJobStatus(x, x.Biddings, null),
 				})
-				.Where(x => x.CustomerId == request.UserId)
-				.AsSplitQuery()
-				.OrderByDescending(x => x.CreatedOnUtc)
 				.ToListAsync(cancellationToken);
 
 			if (jobResponse.Count is 0)

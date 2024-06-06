@@ -36,13 +36,14 @@ public class GetAllDeliveryTypes
     {
         public async Task<Result<List<DeliveryTypeResult>>> Handle(Query request,
             CancellationToken cancellationToken)
-            => await jobDbContext.DeliveryTypes.Select(x => new DeliveryTypeResult
+            => await jobDbContext.DeliveryTypes
+            .AsNoTracking()
+            .Select(x => new DeliveryTypeResult
             {
                 Id = x.Id,
                 Name = x.Name,
                 NoOfDays = x.NoOfDays,
             })
-            .AsNoTracking()
             .ToListAsync(cancellationToken);
     }
 }

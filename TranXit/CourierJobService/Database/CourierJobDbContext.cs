@@ -49,6 +49,10 @@ public partial class CourierJobDbContext : DbContext
 				.HasForeignKey(d => d.JobId)
 				.OnDelete(DeleteBehavior.ClientSetNull)
 				.HasConstraintName("FK_Biddings_Jobs");
+
+			entity.HasOne(d => d.JobStatus).WithMany(p => p.Biddings)
+				.HasForeignKey(d => d.JobStatusId)
+				.HasConstraintName("FK_Biddings_JobStatuses");
 		});
 
 		modelBuilder.Entity<BiddingCharge>(entity =>
@@ -148,6 +152,7 @@ public partial class CourierJobDbContext : DbContext
 				.HasMaxLength(500)
 				.IsUnicode(false);
 			entity.Property(e => e.ExpiryDateUtc).HasColumnType("datetime");
+			entity.Property(e => e.IsJobStatusFromBid).HasDefaultValue(false);
 			entity.Property(e => e.JobNumber).HasMaxLength(10);
 			entity.Property(e => e.OriginAddress)
 				.HasMaxLength(500)

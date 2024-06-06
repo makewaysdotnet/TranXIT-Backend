@@ -18,9 +18,13 @@ public partial class Bidding
 
     public double? CustomClearanceCharges { get; set; }
 
+    public int? JobStatusId { get; set; }
+
     public virtual ICollection<BiddingCharge> BiddingCharges { get; set; } = new List<BiddingCharge>();
 
     public virtual ICollection<BiddingProposal> BiddingProposals { get; set; } = new List<BiddingProposal>();
 
     public virtual Job Job { get; set; } = null!;
+
+    public virtual JobStatus? JobStatus { get; set; }
 }

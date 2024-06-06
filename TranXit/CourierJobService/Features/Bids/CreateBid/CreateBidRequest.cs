@@ -7,7 +7,7 @@
         public double PickupCharges { get; set; } = 0;
         public double HandlingCharges { get; set; } = 0;
         public double CustomClearanceCharges { get; set; } = 0;
-        public IEnumerable<CreateBidProposalRequest> BidProposals { get; set; } = Enumerable.Empty<CreateBidProposalRequest>();
+        public required IEnumerable<CreateBidProposalRequest> BidProposals { get; set; }
         public IEnumerable<CreateBidChargesRequest> BidCustomCharges { get; set; } = Enumerable.Empty<CreateBidChargesRequest>();
     }
     public record CreateBidProposalRequest

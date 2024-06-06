@@ -1,10 +1,12 @@
 ﻿using Carter;
 using CourierJobService.Database;
+using CourierJobService.Helpers;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using SharedServicesManager;
 using SharedServicesManager.Helpers;
 using System.Net;
+using JobStatusEnum = CourierJobService.Enums.JobStatusEnum;
 
 namespace CourierJobService.Features.Jobs.GetJobStats;
 
@@ -39,26 +41,25 @@ public class GetJobStats
 			CancellationToken cancellationToken)
 		{
 			var userId = HttpContextUser.GetCurrentUserId(httpContext);
-			List<string> jobStatuses = ["Open", "Closed", "Lost"];
-			var jobs = await jobDbContext.Jobs
-				.Include(x => x.JobStatus)
-				.Where(x => x.UserId == userId && jobStatuses.Contains(x.JobStatus!.Status!))
+			var jobStatuses = JobsHelper.GetSuccessfullJobStatuses();
+			var biddings = await jobDbContext.Biddings
+				.Where(x => x.UserId == userId && jobStatuses.Contains(Convert.ToInt32(x.JobStatusId)))
 				.AsSplitQuery()
 				.AsNoTracking()
-				.ToListAsync();
+				.ToListAsync(cancellationToken);
 
-			if (!jobs.Any())
+			if (!biddings.Any())
 			{
 				return new JobStatsResult();
 			}
 
 			return new JobStatsResult
 			{
-				Delivered = jobs.Count(x => x.JobStatus!.Status == "Delivered"),
-				InTransit = jobs.Count(x => x.JobStatus!.Status == "InTransit"),
-				Won = jobs.Count(x => x.JobStatus!.Status == "Won"),
-				TotalShipments = jobs.Count(x => x.JobStatus!.Status == "Delivered") +
-					jobs.Count(x => x.JobStatus!.Status == "InTransit"),
+				Delivered = biddings.Count(x => x.JobStatusId == (int)JobStatusEnum.Delivered),
+				InTransit = biddings.Count(x => x.JobStatusId == (int)JobStatusEnum.InTransit),
+				Won = biddings.Count(x => x.JobStatusId == (int)JobStatusEnum.Won),
+				TotalShipments = biddings.Count(x => x.JobStatusId == (int)JobStatusEnum.Delivered) +
+					biddings.Count(x => x.JobStatusId == (int)JobStatusEnum.InTransit),
 			};
 		}
 	}

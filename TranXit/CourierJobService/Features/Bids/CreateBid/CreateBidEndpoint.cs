@@ -1,5 +1,8 @@
 ﻿using Carter;
 using CourierJobService.Database;
+using CourierJobService.Enums;
+using CourierJobService.Features.Bids.Shared;
+using CourierJobService.Helpers;
 using FluentValidation;
 using Mapster;
 using MediatR;
@@ -29,14 +32,14 @@ public class CreateBidEndpoint : CarterModule
 		}).RequireAuthorization("CourierPolicy")
 		.WithTags("Bids")
 		.WithOpenApi()
-		.Produces<Result<CreateBidResult>>((int)HttpStatusCode.OK)
-		.Produces<Result<CreateBidResult>>((int)HttpStatusCode.BadRequest);
+		.Produces<Result<CreateUpdateBidResult>>((int)HttpStatusCode.OK)
+		.Produces<Result<CreateUpdateBidResult>>((int)HttpStatusCode.BadRequest);
 	}
 }
 public class CreateBid
 {
 	#region Command
-	public class Command : IRequest<Result<CreateBidResult>>
+	public class Command : IRequest<Result<CreateUpdateBidResult>>
 	{
 		public required int JobId { get; set; }
 		public int UserId { get; set; }
@@ -56,7 +59,7 @@ public class CreateBid
 		public double HandlingCharges { get; set; } = 0;
 		public double CustomClearanceCharges { get; set; } = 0;
 		public IEnumerable<BidChargesCommand> BidCustomCharges { get; set; } = Enumerable.Empty<BidChargesCommand>();
-		public IEnumerable<BidProposalCommand> BidProposals { get; set; } = Enumerable.Empty<BidProposalCommand>();
+		public required IEnumerable<BidProposalCommand> BidProposals { get; set; }
 	}
 	public class BidChargesCommand
 	{
@@ -87,22 +90,48 @@ public class CreateBid
 			RuleFor(c => c.JobId)
 				.NotEmpty().WithMessage("Your Job Id cannot be empty")
 				.NotNull().WithMessage("Your Job Id cannot be null");
+			RuleFor(c => c.BidProposals)
+				.NotEmpty().WithMessage("Your Job Proposal cannot be empty")
+				.NotNull().WithMessage("Your Job Proposal cannot be null")
+				.Must(x => x.Count() > 0).WithMessage("There must be atleast one job proposal");
 		}
 	}
 	internal sealed class Handler(CourierJobDbContext jobDbContext,
 		IValidator<Command> validator,
 		IHttpContextAccessor httpContext)
-		: IRequestHandler<Command, Result<CreateBidResult>>
+		: IRequestHandler<Command, Result<CreateUpdateBidResult>>
 	{
-		public async Task<Result<CreateBidResult>> Handle(Command request, CancellationToken cancellationToken)
+		public async Task<Result<CreateUpdateBidResult>> Handle(Command request, CancellationToken cancellationToken)
 		{
 			var validationResult = await validator.ValidateAsync(request);
 			if (!validationResult.IsValid)
 			{
 				return new Error(validationResult.ToString());
 			}
+
+			// update job status
+			var job = await jobDbContext.Jobs.FindAsync(request.JobId);
+			var remainingTime = JobsHelper.GetJobRemainingTime(job!.ExpiryDateUtc, DateTime.Now);
+
+			if (remainingTime is 0)
+			{
+				return new Error("Job Expired");
+			}
+
+			if (remainingTime > 0 && (job.JobStatusId is null || job.JobStatusId == (int)JobStatusEnum.Open))
+			{
+				job.JobStatusId = (int)JobStatusEnum.Bidding;
+				jobDbContext.Jobs.Update(job);
+				await jobDbContext.SaveChangesAsync();
+			}
+
+			// create new bid
 			request.UserId = HttpContextUser.GetCurrentUserId(httpContext);
 			var createdBid = await jobDbContext.Biddings
+				.Include(x => x.BiddingCharges)
+				.Include(x => x.BiddingProposals)
+					.ThenInclude(y => y.BiddingProposalItems)
+				.AsSplitQuery()
 				.FirstOrDefaultAsync(x => x.JobId == request.JobId && x.UserId == request.UserId,
 				cancellationToken);
 			if (createdBid is not null)
@@ -117,7 +146,8 @@ public class CreateBid
 				PickupCharges = request.PickupCharges,
 				HandlingCharges = request.HandlingCharges,
 				CustomClearanceCharges = request.CustomClearanceCharges,
-				TotalAmount = request.TotalAmount is not null ? (double)request.TotalAmount : 0,
+				TotalAmount = request.TotalAmount is not null ? (double)request.TotalAmount :
+					request.BidProposals.Min(x => x.Total),
 				BiddingCharges = request.BidCustomCharges.Select(x => new BiddingCharge
 				{
 					Amount = x.Amount,
@@ -141,7 +171,7 @@ public class CreateBid
 
 			await jobDbContext.Biddings.AddAsync(createdBid);
 			await jobDbContext.SaveChangesAsync();
-			return new CreateBidResult { BidId = createdBid.Id };
+			return new CreateUpdateBidResult { BidId = createdBid.Id };
 		}
 	}
 }

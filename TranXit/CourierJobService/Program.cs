@@ -1,5 +1,6 @@
 using Carter;
 using CourierJobService.Database;
+using CourierJobService.Repositories.JobStatusRepository;
 using FluentValidation;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
@@ -16,17 +17,31 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddDbContext<CourierJobDbContext>(o =>
-	o.UseLazyLoadingProxies()
-	 .UseSqlServer(builder.Configuration.GetConnectionString("Database")));
+	 //o.UseLazyLoadingProxies()
+	 o.UseSqlServer(builder.Configuration.GetConnectionString("Database")));
 builder.Services.Configure<MailSettings>(builder.Configuration.GetSection("MailSettings"));
 
 builder.Services.AddJwtAuthentication(builder.Configuration);
 builder.Services.AddAuthorization(options =>
 {
-	options.AddPolicy("CourierPolicy", policy => policy.RequireRole("Courier"));
-	options.AddPolicy("CustomerPolicy", policy => policy.RequireRole("Customer"));
+	options.AddPolicy("CustomerCourierPolicy", policy =>
+	{
+		policy.RequireAuthenticatedUser();
+		policy.RequireRole("Courier", "Customer");
+	});
+	options.AddPolicy("CourierPolicy", policy =>
+	{
+		policy.RequireAuthenticatedUser();
+		policy.RequireRole("Courier");
+	});
+	options.AddPolicy("CustomerPolicy", policy =>
+	{
+		policy.RequireAuthenticatedUser();
+		policy.RequireRole("Customer");
+	});
 });
 
+builder.Services.AddScoped<IJobStatusRepository, JobStatusRepository>();
 
 var assembly = typeof(Program).Assembly;
 

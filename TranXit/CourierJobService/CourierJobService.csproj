@@ -30,7 +30,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Database\" />
     <Folder Include="Features\Bids\UpdateBid\" />
   </ItemGroup>
 

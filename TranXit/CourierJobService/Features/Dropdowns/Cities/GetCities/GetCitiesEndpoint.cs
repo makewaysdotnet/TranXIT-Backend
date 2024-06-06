@@ -39,12 +39,12 @@ public class GetCities
 			CancellationToken cancellationToken)
 			=> await jobDbContext.Cities
 			.Where(x => x.CountryId == request.CountryId)
+			.AsNoTracking()
 			.Select(x => new CityResult
 			{
 				Id = x.Id,
 				Name = x.CityName,
 			})
-			.AsNoTracking()
 			.ToListAsync(cancellationToken);
 	}
 }

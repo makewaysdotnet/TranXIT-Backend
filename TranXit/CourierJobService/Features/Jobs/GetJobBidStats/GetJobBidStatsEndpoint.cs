@@ -1,8 +1,10 @@
 ﻿using Carter;
 using CourierJobService.Database;
+using CourierJobService.Helpers;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using SharedServicesManager;
+using SharedServicesManager.Helpers;
 using System.Net;
 
 namespace CourierJobService.Features.Jobs.GetJobBidStats;
@@ -31,30 +33,33 @@ public class GetJobStats
 	{
 		public required int JobId { get; set; }
 	}
-	internal sealed class QueryHandler(CourierJobDbContext jobDbContext)
+	internal sealed class QueryHandler(CourierJobDbContext jobDbContext,
+		IHttpContextAccessor httpContext)
 		: IRequestHandler<Query, Result<JobBidStatsResult>>
 	{
 		public async Task<Result<JobBidStatsResult>> Handle(Query request,
 			CancellationToken cancellationToken)
 		{
 			var job = await jobDbContext.Jobs
-				.Include(x => x.Biddings)
+				.Include(x => x.Biddings).ThenInclude(y => y.JobStatus)
 				.Include(x => x.JobStatus)
 				.AsSplitQuery()
+				.AsNoTracking()
 				.FirstOrDefaultAsync(x => x.Id == request.JobId, cancellationToken);
-			var currentTime = DateTime.UtcNow;
+			var userId = HttpContextUser.GetCurrentUserId(httpContext);
 			return new JobBidStatsResult
 			{
 				JobId = job!.Id,
 				JobNumber = job.JobNumber,
-				RemainingTime = job.ExpiryDateUtc.HasValue &&
-					(job.ExpiryDateUtc - currentTime)!.Value.TotalSeconds > 0 ?
-					(job.ExpiryDateUtc - currentTime)!.Value.TotalSeconds : 0,
-				TotalBids = job.Biddings.Count,
-				Status = job.JobStatus?.Status!,
-				AverageBid = job.Biddings?.Average(x => x.TotalAmount),
-				MaxBid = job.Biddings?.Max(x => x.TotalAmount),
-				MinBid = job.Biddings?.Min(x => x.TotalAmount),
+				RemainingTime = JobsHelper.GetJobRemainingTime(job.ExpiryDateUtc, DateTime.UtcNow),
+				TotalBids = job.Biddings?.Count,
+				Status = JobsHelper.GetJobStatus(job, job.Biddings, userId),
+				AverageBid = job.Biddings?.Count > 0 ?
+					job.Biddings?.Average(x => x.TotalAmount) : 0,
+				MaxBid = job.Biddings?.Count > 0 ?
+					job.Biddings?.Max(x => x.TotalAmount) : 0,
+				MinBid = job.Biddings?.Count > 0 ?
+					job.Biddings?.Min(x => x.TotalAmount) : 0,
 				CreatedOnUtc = job.CreatedOnUtc,
 			};
 		}

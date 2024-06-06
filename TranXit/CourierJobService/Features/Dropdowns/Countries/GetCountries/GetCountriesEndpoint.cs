@@ -36,12 +36,13 @@ public class GetCountries
 	{
 		public async Task<Result<List<CountryResult>>> Handle(Query request,
 			CancellationToken cancellationToken)
-			=> await jobDbContext.Countries.Select(x => new CountryResult
+			=> await jobDbContext.Countries
+			.AsNoTracking()
+			.Select(x => new CountryResult
 			{
 				Id = x.Id,
 				Name = x.CountryName,
 			})
-			.AsNoTracking()
 			.ToListAsync(cancellationToken);
 	}
 }

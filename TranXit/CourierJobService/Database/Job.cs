@@ -40,6 +40,8 @@ public partial class Job
 
     public DateTime? ExpiryDateUtc { get; set; }
 
+    public bool? IsJobStatusFromBid { get; set; }
+
     public virtual ICollection<Bidding> Biddings { get; set; } = new List<Bidding>();
 
     public virtual CargoMode? CargoMode { get; set; }
