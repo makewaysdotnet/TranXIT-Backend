@@ -6,6 +6,7 @@ using MassTransit;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using SharedServicesManager;
+using SharedServicesManager.Helpers;
 using System.Net;
 
 namespace CourierJobService.Features.Jobs.GetJobDetail;
@@ -41,7 +42,8 @@ public class GetJobDetail
 		public required int jobId { get; set; }
 	}
 	internal sealed class QueryHandler(CourierJobDbContext jobDbContext,
-		IBus messageBus)
+		IBus messageBus,
+		IHttpContextAccessor httpContext)
 		: IRequestHandler<Query, Result<JobDetailResult>>
 	{
 		public async Task<Result<JobDetailResult>> Handle(Query request,
@@ -65,6 +67,8 @@ public class GetJobDetail
 			{
 				return new Error("Job Detail not found");
 			}
+			var currentUserRole = HttpContextUser.GetCurrentUserRole(httpContext);
+
 			var jobDetaliResult = new JobDetailResult
 			{
 				JobId = jobDetail.Id,
@@ -78,7 +82,9 @@ public class GetJobDetail
 				DestinationCity = jobDetail.DestinationCity!.CityName,
 				PickupDateUtc = jobDetail.PickupDateUtc,
 				JobNumber = jobDetail.JobNumber,
-				Status = JobsHelper.GetJobStatus(jobDetail, jobDetail.Biddings, null),
+				Status = currentUserRole == "Customer" ?
+					JobsHelper.GetJobStatus(jobDetail, jobDetail.Biddings, null) :
+					JobsHelper.GetJobStatus(jobDetail, jobDetail.Biddings, HttpContextUser.GetCurrentUserId(httpContext)),
 				JobItems = jobDetail.JobItems!.Select(y => new JobItemResult
 				{
 					JobItemId = y.Id,

@@ -7,5 +7,8 @@ namespace SharedServicesManager.Helpers
 	{
 		public static int GetCurrentUserId(IHttpContextAccessor httpContext)
 		=> Convert.ToInt32(httpContext!.HttpContext!.User.FindFirstValue("UserId"));
+
+		public static string GetCurrentUserRole(IHttpContextAccessor httpContext)
+		=> httpContext!.HttpContext!.User.FindFirstValue(ClaimTypes.Role)!;
 	}
 }
