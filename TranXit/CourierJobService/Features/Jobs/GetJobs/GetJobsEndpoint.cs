@@ -1,6 +1,5 @@
 ﻿using Carter;
 using CourierJobService.Database;
-using CourierJobService.Enums;
 using CourierJobService.Helpers;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -77,9 +76,7 @@ public class GetJob
 					MaxBid = x.Biddings.Max(y => y.TotalAmount),
 					MinBid = x.Biddings.Min(y => y.TotalAmount),
 					YourBid = x.Biddings.FirstOrDefault(y => y.UserId == request.UserId)!.TotalAmount,
-					RemainingTime = x.ExpiryDateUtc.HasValue &&
-					(x.ExpiryDateUtc - currentTime)!.Value.TotalSeconds > 0 ?
-					(x.ExpiryDateUtc - currentTime)!.Value.TotalSeconds : 0
+					RemainingTime = JobsHelper.GetJobRemainingTime(x.ExpiryDateUtc, currentTime)
 				});
 
 			if (jobsQuery is null)

@@ -1,6 +1,5 @@
 ﻿using Carter;
 using CourierJobService.Database;
-using CourierJobService.Enums;
 using CourierJobService.Helpers;
 using CourierJobService.Requests;
 using MassTransit;
@@ -42,8 +41,7 @@ public class GetJobDetail
 		public required int jobId { get; set; }
 	}
 	internal sealed class QueryHandler(CourierJobDbContext jobDbContext,
-		IBus messageBus,
-		IHttpContextAccessor httpContext)
+		IBus messageBus)
 		: IRequestHandler<Query, Result<JobDetailResult>>
 	{
 		public async Task<Result<JobDetailResult>> Handle(Query request,
