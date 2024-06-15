@@ -10,7 +10,9 @@ FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 COPY ["CourierJobService/CourierJobService.csproj", "CourierJobService/"]
-RUN dotnet restore "./CourierJobService/./CourierJobService.csproj"
+COPY ["SharedManager/SharedManager.csproj", "SharedManager/"]
+COPY ["SharedServicesManager/SharedServicesManager.csproj", "SharedServicesManager/"]
+RUN dotnet restore "./CourierJobService/CourierJobService.csproj"
 COPY . .
 WORKDIR "/src/CourierJobService"
 RUN dotnet build "./CourierJobService.csproj" -c $BUILD_CONFIGURATION -o /app/build

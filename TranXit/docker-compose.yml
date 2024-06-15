@@ -1,14 +1,11 @@
 version: '3.4'
-
 networks:
   backend:
-  
+    driver: bridge
 
 services:
-
   ocelotapigw:
-    container_name: api-gateway
-    image: ${DOCKER_REGISTRY-}ocelotapigw
+    image: api-gateway-image
     build:
       context: .
       dockerfile: OcelotApiGw/Dockerfile
@@ -17,35 +14,35 @@ services:
     networks:
     - backend
 
-
   accountservice:
-    container_name: account-service
-    image: ${DOCKER_REGISTRY-}accountservice
+    image: account-service-image
     build:
       context: .
       dockerfile: AccountService/Dockerfile
-
-
-
-  # emailmq:
-  #   image: rabbitmq:3-management
-  #   container_name: email-mq
-  #   hostname: emailmq
-  #   volumes:
-  #       - ./.containers/queue/data/:/var/lib/rabbitmq
-  #       - ./.containers/queue/log/:/var/log/rabbitmq
-  #   ports:
-  #     - 5672:5672
-  #     - 15672:15672
-  #   environment:
-  #       RABBITMQ_DEFAULT_USER: tranxit
-  #       RABBITMQ_DEFAULT_PASS: tranxit
-
+    environment:
+      - RabbitMQ__HostName=rabbitmq
+    networks:
+    - backend
+    depends_on:
+      - rabbitmq
 
 
   courierjobservice:
-    image: ${DOCKER_REGISTRY-}courierjobservice
+    image: courierjob-sevice-image
     build:
       context: .
       dockerfile: CourierJobService/Dockerfile
+    environment:
+      - RabbitMQ__HostName=rabbitmq
+    networks:
+    - backend
+    depends_on:
+      - rabbitmq
 
+  rabbitmq:
+    image: "rabbitmq:3-management"
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - backend

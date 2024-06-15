@@ -1,5 +1,6 @@
 {
   "Routes": [
+    // ********** Account Service Region Start **********
     //Login API
     {
       "DownstreamPathTemplate": "/api/login",
@@ -119,8 +120,29 @@
       "UpstreamPathTemplate": "/api/verify-code",
       "UpstreamHttpMethod": [ "Post" ],
       "FileCacheOptions": { "TtlSeconds": 60 }
+    },
+    // ---------- Account Service Region End ----------
+
+    // ********** Courier Job Service Region Start **********
+
+    //Get Job Details Endpoint
+    {
+      "DownstreamPathTemplate": "/courierjobservice/jobs/{jobId:int}/details",
+      "DownstreamSchema": "http",
+      "DownstreamHttpMethod": "GET",
+      "RouteIsCaseSensitive": false,
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "courierjobservice",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/courierjobservice/jobs/{jobId:int}/details",
+      "UpstreamHttpMethod": [ "GET" ],
+      "FileCacheOptions": { "TtlSeconds": 60 }
     }
-    // End......................................
+
+    // ---------- Courier Job Service Region End ----------
   ],
   "GlobalConfiguration": { "BaseUrl": "http://localhost:61259" }
 

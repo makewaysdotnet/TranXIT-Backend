@@ -57,17 +57,30 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services.AddHttpContextAccessor();
 
+//builder.Services.AddMassTransit(busConfigurator =>
+//{
+//	busConfigurator.SetKebabCaseEndpointNameFormatter();
+//	busConfigurator.UsingAmazonSqs((context, config) =>
+//	{
+//		config.Host(builder.Configuration["Aws:Region"], h =>
+//		{
+//			h.AccessKey(builder.Configuration["Aws:AccessKey"]);
+//			h.SecretKey(builder.Configuration["Aws:SecretKey"]);
+//		});
+//		config.ConfigureEndpoints(context);
+//	});
+//});
 builder.Services.AddMassTransit(busConfigurator =>
 {
 	busConfigurator.SetKebabCaseEndpointNameFormatter();
-	busConfigurator.UsingAmazonSqs((context, config) =>
+	busConfigurator.UsingRabbitMq((context, configurator) =>
 	{
-		config.Host(builder.Configuration["Aws:Region"], h =>
+		configurator.Host(builder.Configuration["RabbitMQ:HostName"]!, "/", c =>
 		{
-			h.AccessKey(builder.Configuration["Aws:AccessKey"]);
-			h.SecretKey(builder.Configuration["Aws:SecretKey"]);
+			c.Username(builder.Configuration["RabbitMQ:UserName"]!);
+			c.Password(builder.Configuration["RabbitMQ:Password"]!);
 		});
-		config.ConfigureEndpoints(context);
+		configurator.ConfigureEndpoints(context);
 	});
 });
 builder.Services.AddCors();
