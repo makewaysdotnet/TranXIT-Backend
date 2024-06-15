@@ -4,9 +4,9 @@
       "commandName": "DockerCompose",
       "commandVersion": "1.0",
       "serviceActions": {
-        "authservice": "StartDebugging",
+        "accountservice": "StartDebugging",
         "ocelotapigw": "StartDebugging",
-        "courierservice": "StartDebugging"
+        "courierjobservice": "StartDebugging"
       }
     }
   }

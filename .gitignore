@@ -1,0 +1,37 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/build/
+*.suo
+*.user
+_ReSharper.*/
+*.sdf
+bin/
+obj/
+Debug/
+Release/
+*.opensdf
+*.tlog
+*.log
+TestResult.xml
+*.VisualState.xml
+Version.cs
+Version.h
+Version.cpp
+
+/TranXit/.vs
+
+/TranXit/obj
+/TranXit/bin
+
+/TranXit/AccountService/obj
+/TranXit/AccountService/bin
+
+
+/TranXit/OcelotApiGw/obj
+/TranXit/OcelotApiGw/bin
+
+# SharedServicesManager
+
+/TranXit/SharedServicesManager/obj
+/TranXit/SharedServicesManager/bin

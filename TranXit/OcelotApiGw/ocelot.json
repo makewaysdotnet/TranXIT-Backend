@@ -1,5 +1,6 @@
 {
   "Routes": [
+    // ********** Account Service Region Start **********
     //Login API
     {
       "DownstreamPathTemplate": "/api/login",
@@ -8,11 +9,27 @@
       "RouteIsCaseSensitive": false,
       "DownstreamHostAndPorts": [
         {
-          "Host": "authservice",
+          "Host": "accountservice",
           "Port": 8080
         }
       ],
       "UpstreamPathTemplate": "/api/login",
+      "UpstreamHttpMethod": [ "Post" ],
+      "FileCacheOptions": { "TtlSeconds": 60 }
+    },
+    //Google Login API
+    {
+      "DownstreamPathTemplate": "/api/login/google",
+      "DownstreamSchema": "http",
+      "DownstreamHttpMethod": "POST",
+      "RouteIsCaseSensitive": false,
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "accountservice",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/login/google",
       "UpstreamHttpMethod": [ "Post" ],
       "FileCacheOptions": { "TtlSeconds": 60 }
     },
@@ -24,15 +41,108 @@
       "RouteIsCaseSensitive": false,
       "DownstreamHostAndPorts": [
         {
-          "Host": "authservice",
+          "Host": "accountservice",
           "Port": 8080
         }
       ],
       "UpstreamPathTemplate": "/api/register",
       "UpstreamHttpMethod": [ "Post" ],
       "FileCacheOptions": { "TtlSeconds": 60 }
+    },
+
+    //Get All Roles API
+    {
+      "DownstreamPathTemplate": "/api/roles",
+      "DownstreamSchema": "http",
+      "DownstreamHttpMethod": "GET",
+      "RouteIsCaseSensitive": false,
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "accountservice",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/roles",
+      "UpstreamHttpMethod": [ "Get" ],
+      "FileCacheOptions": { "TtlSeconds": 60 }
+    },
+
+    //Get All Role by id API
+    {
+      "DownstreamPathTemplate": "/api/roles/{id}",
+      "DownstreamSchema": "http",
+      "DownstreamHttpMethod": "GET",
+      "RouteIsCaseSensitive": false,
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "accountservice",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/roles/{id}",
+      "UpstreamHttpMethod": [ "Get" ],
+      "FileCacheOptions": { "TtlSeconds": 60 },
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      }
+    },
+    //Upload Document API
+    {
+      "DownstreamPathTemplate": "/api/upload",
+      "DownstreamSchema": "http",
+      "DownstreamHttpMethod": "POST",
+      "RouteIsCaseSensitive": false,
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "accountservice",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/upload",
+      "UpstreamHttpMethod": [ "Post" ],
+      "FileCacheOptions": { "TtlSeconds": 60 },
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      }
+    },
+    //Verify Code API
+    {
+      "DownstreamPathTemplate": "/api/verify-code",
+      "DownstreamSchema": "http",
+      "DownstreamHttpMethod": "POST",
+      "RouteIsCaseSensitive": false,
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "accountservice",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/verify-code",
+      "UpstreamHttpMethod": [ "Post" ],
+      "FileCacheOptions": { "TtlSeconds": 60 }
+    },
+    // ---------- Account Service Region End ----------
+
+    // ********** Courier Job Service Region Start **********
+
+    //Get Job Details Endpoint
+    {
+      "DownstreamPathTemplate": "/courierjobservice/jobs/{jobId:int}/details",
+      "DownstreamSchema": "http",
+      "DownstreamHttpMethod": "GET",
+      "RouteIsCaseSensitive": false,
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "courierjobservice",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/courierjobservice/jobs/{jobId:int}/details",
+      "UpstreamHttpMethod": [ "GET" ],
+      "FileCacheOptions": { "TtlSeconds": 60 }
     }
-    // End......................................
+
+    // ---------- Courier Job Service Region End ----------
   ],
   "GlobalConfiguration": { "BaseUrl": "http://localhost:61259" }
 

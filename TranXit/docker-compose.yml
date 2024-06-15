@@ -1,14 +1,11 @@
 version: '3.4'
-
 networks:
   backend:
-  
+    driver: bridge
 
 services:
-
   ocelotapigw:
-    container_name: api-gateway
-    image: ${DOCKER_REGISTRY-}ocelotapigw
+    image: api-gateway-image
     build:
       context: .
       dockerfile: OcelotApiGw/Dockerfile
@@ -17,40 +14,35 @@ services:
     networks:
     - backend
 
-
-  authdb:
-    container_name: auth-db
-    image: mcr.microsoft.com/mssql/server:2019-latest
-    ports:
-     - 1433:1433
+  accountservice:
+    image: account-service-image
+    build:
+      context: .
+      dockerfile: AccountService/Dockerfile
     environment:
-    - ACCEPT_EULA=Y
-    - MSSQL_SA_PASSWORD=Hamza_1234
-    volumes:
-    - ./data:/var/opt/mssql/data
+      - RabbitMQ__HostName=rabbitmq
     networks:
     - backend
-
-  authservice:
-    container_name: auth-service
-    image: ${DOCKER_REGISTRY-}authservice
-    build:
-      context: .
-      dockerfile: AuthService/Dockerfile
-    hostname: authservice
-    # ports:
-    # - 61263:8080
     depends_on:
-    - authdb
-    networks:
-    - backend
+      - rabbitmq
 
 
-  courierservice:
-    image: ${DOCKER_REGISTRY-}courierservice
+  courierjobservice:
+    image: courierjob-sevice-image
     build:
       context: .
-      dockerfile: CourierService/Dockerfile
+      dockerfile: CourierJobService/Dockerfile
+    environment:
+      - RabbitMQ__HostName=rabbitmq
     networks:
     - backend
+    depends_on:
+      - rabbitmq
 
+  rabbitmq:
+    image: "rabbitmq:3-management"
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - backend
