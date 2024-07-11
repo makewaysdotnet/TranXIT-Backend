@@ -16,7 +16,7 @@ namespace CourierJobService.Features.Bids.CreateBid;
 public class CreateBidEndpoint : CarterModule
 {
 	public CreateBidEndpoint()
-		: base("/courierjobservice")
+		: base("/api")
 	{ }
 	public override void AddRoutes(IEndpointRouteBuilder app)
 	{

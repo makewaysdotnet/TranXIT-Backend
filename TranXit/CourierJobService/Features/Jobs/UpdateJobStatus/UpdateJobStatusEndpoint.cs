@@ -14,7 +14,7 @@ namespace CourierJobService.Features.Jobs.UpdateJobStatus;
 public class UpdateJobStatusEndpoint : CarterModule
 {
 	public UpdateJobStatusEndpoint()
-	: base("/courierjobservice")
+	: base("/api")
 	{ }
 	public override void AddRoutes(IEndpointRouteBuilder app)
 	{

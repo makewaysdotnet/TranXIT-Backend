@@ -15,7 +15,7 @@ namespace CourierJobService.Features.Jobs.CreateJob;
 public class CreateJobEndpoint : CarterModule
 {
 	public CreateJobEndpoint()
-		: base("/courierjobservice")
+		: base("/api")
 	{ }
 	public override void AddRoutes(IEndpointRouteBuilder app)
 	{

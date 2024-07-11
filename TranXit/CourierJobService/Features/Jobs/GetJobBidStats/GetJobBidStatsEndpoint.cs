@@ -12,7 +12,7 @@ namespace CourierJobService.Features.Jobs.GetJobBidStats;
 public class GetJobBidStatsEndpoint : CarterModule
 {
 	public GetJobBidStatsEndpoint()
-	: base("/courierjobservice")
+	: base("/api")
 	{ }
 	public override void AddRoutes(IEndpointRouteBuilder app)
 	{

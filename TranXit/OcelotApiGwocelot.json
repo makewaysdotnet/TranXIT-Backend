@@ -1,6 +1,5 @@
 {
   "Routes": [
-    // Login API
     {
       "DownstreamPathTemplate": "/api/login",
       "DownstreamSchema": "http",
@@ -13,10 +12,13 @@
         }
       ],
       "UpstreamPathTemplate": "/api/login",
-      "UpstreamHttpMethod": [ "Post" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "UpstreamHttpMethod": [
+        "Post"
+      ],
+      "FileCacheOptions": {
+        "TtlSeconds": 60
+      }
     },
-    // Google Login API
     {
       "DownstreamPathTemplate": "/api/login/google",
       "DownstreamSchema": "http",
@@ -29,10 +31,13 @@
         }
       ],
       "UpstreamPathTemplate": "/api/login/google",
-      "UpstreamHttpMethod": [ "Post" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "UpstreamHttpMethod": [
+        "Post"
+      ],
+      "FileCacheOptions": {
+        "TtlSeconds": 60
+      }
     },
-    // Register API
     {
       "DownstreamPathTemplate": "/api/register",
       "DownstreamSchema": "http",
@@ -45,11 +50,13 @@
         }
       ],
       "UpstreamPathTemplate": "/api/register",
-      "UpstreamHttpMethod": [ "Post" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "UpstreamHttpMethod": [
+        "Post"
+      ],
+      "FileCacheOptions": {
+        "TtlSeconds": 60
+      }
     },
-
-    // Get All Roles API
     {
       "DownstreamPathTemplate": "/api/roles",
       "DownstreamSchema": "http",
@@ -62,11 +69,13 @@
         }
       ],
       "UpstreamPathTemplate": "/api/roles",
-      "UpstreamHttpMethod": [ "Get" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "UpstreamHttpMethod": [
+        "Get"
+      ],
+      "FileCacheOptions": {
+        "TtlSeconds": 60
+      }
     },
-
-    // Get All Role by id API
     {
       "DownstreamPathTemplate": "/api/roles/{id}",
       "DownstreamSchema": "http",
@@ -79,14 +88,16 @@
         }
       ],
       "UpstreamPathTemplate": "/api/roles/{id}",
-      "UpstreamHttpMethod": [ "Get" ],
-      "FileCacheOptions": { "TtlSeconds": 60 },
+      "UpstreamHttpMethod": [
+        "Get"
+      ],
+      "FileCacheOptions": {
+        "TtlSeconds": 60
+      },
       "AuthenticationOptions": {
         "AuthenticationProviderKey": "Bearer"
       }
     },
-
-    // Upload Document API
     {
       "DownstreamPathTemplate": "/api/upload",
       "DownstreamSchema": "http",
@@ -99,14 +110,16 @@
         }
       ],
       "UpstreamPathTemplate": "/api/upload",
-      "UpstreamHttpMethod": [ "Post" ],
-      "FileCacheOptions": { "TtlSeconds": 60 },
+      "UpstreamHttpMethod": [
+        "Post"
+      ],
+      "FileCacheOptions": {
+        "TtlSeconds": 60
+      },
       "AuthenticationOptions": {
         "AuthenticationProviderKey": "Bearer"
       }
     },
-
-    // Verify Code API
     {
       "DownstreamPathTemplate": "/api/verify-code",
       "DownstreamSchema": "http",
@@ -119,11 +132,13 @@
         }
       ],
       "UpstreamPathTemplate": "/api/verify-code",
-      "UpstreamHttpMethod": [ "Post" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "UpstreamHttpMethod": [
+        "Post"
+      ],
+      "FileCacheOptions": {
+        "TtlSeconds": 60
+      }
     },
-
-    // Send Code API
     {
       "DownstreamPathTemplate": "/api/send-code",
       "DownstreamSchema": "http",
@@ -136,10 +151,13 @@
         }
       ],
       "UpstreamPathTemplate": "/api/send-code",
-      "UpstreamHttpMethod": [ "Post" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "UpstreamHttpMethod": [
+        "Post"
+      ],
+      "FileCacheOptions": {
+        "TtlSeconds": 60
+      }
     },
-    // Create Bid Endpoint
     {
       "DownstreamPathTemplate": "/api/bids",
       "DownstreamSchema": "http",
@@ -152,11 +170,13 @@
         }
       ],
       "UpstreamPathTemplate": "/api/bids",
-      "UpstreamHttpMethod": [ "POST" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "UpstreamHttpMethod": [
+        "POST"
+      ],
+      "FileCacheOptions": {
+        "TtlSeconds": 60
+      }
     },
-
-    // Get Job User Bids Endpoint
     {
       "DownstreamPathTemplate": "/api/bids/{jobId:int}",
       "DownstreamSchema": "http",
@@ -169,11 +189,13 @@
         }
       ],
       "UpstreamPathTemplate": "/api/bids/{jobId:int}",
-      "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "UpstreamHttpMethod": [
+        "GET"
+      ],
+      "FileCacheOptions": {
+        "TtlSeconds": 60
+      }
     },
-
-    // Update Bid Job Status Endpoint
     {
       "DownstreamPathTemplate": "/api/bids/status",
       "DownstreamSchema": "http",
@@ -186,11 +208,13 @@
         }
       ],
       "UpstreamPathTemplate": "/api/bids/status",
-      "UpstreamHttpMethod": [ "PUT" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "UpstreamHttpMethod": [
+        "PUT"
+      ],
+      "FileCacheOptions": {
+        "TtlSeconds": 60
+      }
     },
-
-    // Get Cities Endpoint
     {
       "DownstreamPathTemplate": "/api/cities/{countryId:int}",
       "DownstreamSchema": "http",
@@ -203,11 +227,13 @@
         }
       ],
       "UpstreamPathTemplate": "/api/cities/{countryId:int}",
-      "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "UpstreamHttpMethod": [
+        "GET"
+      ],
+      "FileCacheOptions": {
+        "TtlSeconds": 60
+      }
     },
-
-    // Get Countries Endpoint
     {
       "DownstreamPathTemplate": "/api/countries",
       "DownstreamSchema": "http",
@@ -220,11 +246,13 @@
         }
       ],
       "UpstreamPathTemplate": "/api/countries",
-      "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "UpstreamHttpMethod": [
+        "GET"
+      ],
+      "FileCacheOptions": {
+        "TtlSeconds": 60
+      }
     },
-
-    // Get Courier Modes Endpoint
     {
       "DownstreamPathTemplate": "/api/courier-modes",
       "DownstreamSchema": "http",
@@ -237,11 +265,13 @@
         }
       ],
       "UpstreamPathTemplate": "/api/courier-modes",
-      "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "UpstreamHttpMethod": [
+        "GET"
+      ],
+      "FileCacheOptions": {
+        "TtlSeconds": 60
+      }
     },
-
-    // Get Delivery Types Endpoint
     {
       "DownstreamPathTemplate": "/api/delivery-types",
       "DownstreamSchema": "http",
@@ -254,11 +284,13 @@
         }
       ],
       "UpstreamPathTemplate": "/api/delivery-types",
-      "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "UpstreamHttpMethod": [
+        "GET"
+      ],
+      "FileCacheOptions": {
+        "TtlSeconds": 60
+      }
     },
-
-    // Get Item Types Endpoint
     {
       "DownstreamPathTemplate": "/api/item-types",
       "DownstreamSchema": "http",
@@ -271,11 +303,13 @@
         }
       ],
       "UpstreamPathTemplate": "/api/item-types",
-      "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "UpstreamHttpMethod": [
+        "GET"
+      ],
+      "FileCacheOptions": {
+        "TtlSeconds": 60
+      }
     },
-
-    // Get Shipment Types Endpoint
     {
       "DownstreamPathTemplate": "/api/shipment-types",
       "DownstreamSchema": "http",
@@ -288,15 +322,20 @@
         }
       ],
       "UpstreamPathTemplate": "/api/shipment-types",
-      "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "UpstreamHttpMethod": [
+        "GET"
+      ],
+      "FileCacheOptions": {
+        "TtlSeconds": 60
+      }
     },
-
-    // Create, GET Jobs Endpoint
     {
       "DownstreamPathTemplate": "/api/jobs",
       "DownstreamSchema": "http",
-      "DownstreamHttpMethod": [ "GET", "POST" ],
+      "DownstreamHttpMethod": [
+        "GET",
+        "POST"
+      ],
       "RouteIsCaseSensitive": false,
       "DownstreamHostAndPorts": [
         {
@@ -305,11 +344,14 @@
         }
       ],
       "UpstreamPathTemplate": "/api/jobs",
-      "UpstreamHttpMethod": [ "GET", "POST" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "UpstreamHttpMethod": [
+        "GET",
+        "POST"
+      ],
+      "FileCacheOptions": {
+        "TtlSeconds": 60
+      }
     },
-
-    // Get Job by Customer Id Endpoint
     {
       "DownstreamPathTemplate": "/api/jobs/{customerId:int}",
       "DownstreamSchema": "http",
@@ -322,11 +364,13 @@
         }
       ],
       "UpstreamPathTemplate": "/api/jobs/{customerId:int}",
-      "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "UpstreamHttpMethod": [
+        "GET"
+      ],
+      "FileCacheOptions": {
+        "TtlSeconds": 60
+      }
     },
-
-    // Get Job Bid Stats Endpoint
     {
       "DownstreamPathTemplate": "/api/jobs/{jobId:int}/bid-stats",
       "DownstreamSchema": "http",
@@ -339,11 +383,13 @@
         }
       ],
       "UpstreamPathTemplate": "/api/jobs/{jobId:int}/bid-stats",
-      "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "UpstreamHttpMethod": [
+        "GET"
+      ],
+      "FileCacheOptions": {
+        "TtlSeconds": 60
+      }
     },
-
-    // Get Job Details Endpoint
     {
       "DownstreamPathTemplate": "/api/jobs/{jobId:int}/details",
       "DownstreamSchema": "http",
@@ -356,11 +402,13 @@
         }
       ],
       "UpstreamPathTemplate": "/api/jobs/{jobId:int}/details",
-      "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "UpstreamHttpMethod": [
+        "GET"
+      ],
+      "FileCacheOptions": {
+        "TtlSeconds": 60
+      }
     },
-
-    // Get Job Stats Endpoint
     {
       "DownstreamPathTemplate": "/api/jobs/stats",
       "DownstreamSchema": "http",
@@ -373,11 +421,13 @@
         }
       ],
       "UpstreamPathTemplate": "/api/jobs/stats",
-      "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "UpstreamHttpMethod": [
+        "GET"
+      ],
+      "FileCacheOptions": {
+        "TtlSeconds": 60
+      }
     },
-
-    // Get Job Stats Endpoint
     {
       "DownstreamPathTemplate": "/api/jobs/status",
       "DownstreamSchema": "http",
@@ -390,8 +440,12 @@
         }
       ],
       "UpstreamPathTemplate": "/api/jobs/status",
-      "UpstreamHttpMethod": [ "PUT" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "UpstreamHttpMethod": [
+        "PUT"
+      ],
+      "FileCacheOptions": {
+        "TtlSeconds": 60
+      }
     }
   ],
   "GlobalConfiguration": {

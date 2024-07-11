@@ -11,7 +11,7 @@ namespace CourierJobService.Features.Dropdowns.Cities.GetCities;
 public class GetCitiesEndpoint : CarterModule
 {
 	public GetCitiesEndpoint()
-	: base("/courierjobservice")
+	: base("/api")
 	{ }
 	public override void AddRoutes(IEndpointRouteBuilder app)
 	{
