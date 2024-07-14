@@ -70,8 +70,8 @@ public class GetJob
 					JobNumber = x.JobNumber,
 					OriginAddress = x.OriginAddress,
 					DestinationAddress = x.DestinationAddress,
-					StatusId = x.JobStatusId,
-					Status = JobsHelper.GetJobStatus(x, x.Biddings, null),
+					StatusId = JobsHelper.GetJobStatus(x, x.Biddings, null).Item1,
+					Status = JobsHelper.GetJobStatus(x, x.Biddings, null).Item2,
 				})
 				.ToListAsync(cancellationToken);
 

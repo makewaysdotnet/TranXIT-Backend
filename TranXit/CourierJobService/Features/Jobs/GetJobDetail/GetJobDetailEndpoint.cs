@@ -83,8 +83,8 @@ public class GetJobDetail
 				PickupDateUtc = jobDetail.PickupDateUtc,
 				JobNumber = jobDetail.JobNumber,
 				Status = currentUserRole == "Customer" ?
-					JobsHelper.GetJobStatus(jobDetail, jobDetail.Biddings, null) :
-					JobsHelper.GetJobStatus(jobDetail, jobDetail.Biddings, HttpContextUser.GetCurrentUserId(httpContext)),
+					JobsHelper.GetJobStatus(jobDetail, jobDetail.Biddings, null).Item2 :
+					JobsHelper.GetJobStatus(jobDetail, jobDetail.Biddings, HttpContextUser.GetCurrentUserId(httpContext)).Item2,
 				JobItems = jobDetail.JobItems!.Select(y => new JobItemResult
 				{
 					JobItemId = y.Id,

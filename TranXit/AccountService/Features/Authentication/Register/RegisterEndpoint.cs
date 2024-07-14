@@ -107,23 +107,23 @@ public class AccountRegister
 			await accountDbContext.SaveChangesAsync(cancellationToken);
 
 			//Send Email Verification Code
-			var code = utils.Generate6DRandomCode();
-			var mailRequest = new MailRequest
-			{
-				EmailTo = [request.Email],
-				EmailSubject = "Email Verification",
-				EmailBody = $"{code}"
-			};
-			var isMailSent = await mailService.SendMail(mailRequest);
-			if (!isMailSent)
-			{
-				return new Error("User Registered Successfully But Email Sent Failed, Retry Verification");
-			}
-			user.CodeSentAtUtc = DateTime.UtcNow;
-			user.VerificationCode = code;
+			//var code = utils.Generate6DRandomCode();
+			//var mailRequest = new MailRequest
+			//{
+			//	EmailTo = [request.Email],
+			//	EmailSubject = "Email Verification",
+			//	EmailBody = $"{code}"
+			//};
+			//var isMailSent = await mailService.SendMail(mailRequest);
+			//if (!isMailSent)
+			//{
+			//	return new Error("User Registered Successfully But Email Sent Failed, Retry Verification");
+			//}
+			//user.CodeSentAtUtc = DateTime.UtcNow;
+			//user.VerificationCode = code;
 
-			accountDbContext.Users.Update(user);
-			await accountDbContext.SaveChangesAsync(cancellationToken);
+			//accountDbContext.Users.Update(user);
+			//await accountDbContext.SaveChangesAsync(cancellationToken);
 
 
 			return new LoginResult

@@ -12,7 +12,7 @@ namespace OcelotApiGw
 			var combinedConfig = new
 			{
 				Routes = new List<object>(),
-				GlobalConfiguration = new { BaseUrl = "http://localhost:5500" }
+				GlobalConfiguration = new { BaseUrl = "http://localhost:61260" }
 			};
 
 			foreach (var file in Directory.GetFiles(configDirectory, "*.json"))

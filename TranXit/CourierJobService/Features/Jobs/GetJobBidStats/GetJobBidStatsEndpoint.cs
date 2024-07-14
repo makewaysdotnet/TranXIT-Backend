@@ -53,7 +53,7 @@ public class GetJobStats
 				JobNumber = job.JobNumber,
 				RemainingTime = JobsHelper.GetJobRemainingTime(job.ExpiryDateUtc, DateTime.UtcNow),
 				TotalBids = job.Biddings?.Count,
-				Status = JobsHelper.GetJobStatus(job, job.Biddings, userId),
+				Status = JobsHelper.GetJobStatus(job, job.Biddings, userId).Item2,
 				AverageBid = job.Biddings?.Count > 0 ?
 					job.Biddings?.Average(x => x.TotalAmount) : 0,
 				MaxBid = job.Biddings?.Count > 0 ?

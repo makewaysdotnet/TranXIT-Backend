@@ -10,7 +10,7 @@ services:
       context: .
       dockerfile: OcelotApiGw/Dockerfile
     ports:
-    - 5500:8080
+    - 61260:8080
     networks:
     - backend
 
