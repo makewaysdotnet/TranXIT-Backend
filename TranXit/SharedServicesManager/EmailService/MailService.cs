@@ -46,7 +46,7 @@ public class MailService(IOptions<MailSettings> mailSettings) : IMailService
 
 			return true;
 		}
-		catch (Exception)
+		catch (Exception ex)
 		{
 			// Exception Details
 			throw;

@@ -4,7 +4,6 @@ using FluentValidation;
 using MediatR;
 using SharedServicesManager;
 using System.Net;
-using System.Security.Claims;
 
 namespace AccountService.Features.AccountDocuments.UploadDocument;
 
@@ -15,9 +14,13 @@ public class UploadDocumentEndpoint : CarterModule
 	{ }
 	public override void AddRoutes(IEndpointRouteBuilder app)
 	{
-		app.MapPost("/upload", async (IFormFile file, ISender sender) =>
+		app.MapPost("/upload", async (UploadDocumentRequest request, ISender sender) =>
 		{
-			var command = new UploadDocument.Command { File = file };
+			var command = new UploadDocument.Command
+			{
+				UserId = request.UserId,
+				File = request.file
+			};
 			var result = await sender.Send(command);
 			if (!result.isSuccess)
 			{
@@ -25,8 +28,6 @@ public class UploadDocumentEndpoint : CarterModule
 			}
 			return Results.Ok(result);
 		})
-		.RequireAuthorization()
-		.DisableAntiforgery()
 		.WithOpenApi()
 		.WithTags("Auth")
 		.Produces<Result<int>>((int)HttpStatusCode.OK)
@@ -37,6 +38,7 @@ public class UploadDocument
 {
 	public class Command : IRequest<Result<int>>
 	{
+		public required int UserId { get; set; }
 		public required IFormFile File { get; set; }
 	}
 
@@ -49,8 +51,7 @@ public class UploadDocument
 		}
 	}
 	internal sealed class Handler(AccountDbContext accountDbContext,
-		IValidator<Command> validator,
-		IHttpContextAccessor httpContextAccessor)
+		IValidator<Command> validator)
 		: IRequestHandler<Command, Result<int>>
 	{
 		public async Task<Result<int>> Handle(Command request, CancellationToken cancellationToken)
@@ -60,16 +61,12 @@ public class UploadDocument
 			{
 				return new Error(validationResult.ToString());
 			}
-			var userId = httpContextAccessor.HttpContext?.User.FindFirstValue("UserId");
-			if (userId is null)
-			{
-				return new Error("Invalid User");
-			}
+
 			var userFile = new UserFile
 			{
 				Name = request.File.Name,
 				Type = request.File.ContentType,
-				UserId = int.Parse(userId)
+				UserId = request.UserId
 			};
 			using (MemoryStream ms = new MemoryStream())
 			{
