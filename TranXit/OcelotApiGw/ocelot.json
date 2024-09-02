@@ -88,7 +88,7 @@
 
     // Upload Document API
     {
-      "DownstreamPathTemplate": "/api/upload",
+      "DownstreamPathTemplate": "/api/upload/document",
       "DownstreamSchema": "http",
       "DownstreamHttpMethod": "POST",
       "RouteIsCaseSensitive": false,
@@ -98,12 +98,26 @@
           "Port": 8080
         }
       ],
-      "UpstreamPathTemplate": "/api/upload",
+      "UpstreamPathTemplate": "/api/upload/document",
       "UpstreamHttpMethod": [ "Post" ],
-      "FileCacheOptions": { "TtlSeconds": 60 },
-      "AuthenticationOptions": {
-        "AuthenticationProviderKey": "Bearer"
-      }
+      "FileCacheOptions": { "TtlSeconds": 60 }
+    },
+
+    // Upload Image API
+    {
+      "DownstreamPathTemplate": "/api/upload/image",
+      "DownstreamSchema": "http",
+      "DownstreamHttpMethod": "POST",
+      "RouteIsCaseSensitive": false,
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "accountservice",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/upload/image",
+      "UpstreamHttpMethod": [ "Post" ],
+      "FileCacheOptions": { "TtlSeconds": 60 }
     },
 
     // Verify Code API

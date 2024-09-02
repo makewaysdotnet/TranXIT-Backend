@@ -5,28 +5,28 @@ using MediatR;
 using SharedServicesManager;
 using System.Net;
 
-namespace AccountService.Features.AccountDocuments.UploadDocument;
+namespace AccountService.Features.AccountDocuments.UploadImage;
 
-public class UploadDocumentEndpoint : CarterModule
+public class UploadImageEndpoint : CarterModule
 {
-	public UploadDocumentEndpoint()
+	public UploadImageEndpoint()
 		: base("/api")
 	{ }
 	public override void AddRoutes(IEndpointRouteBuilder app)
 	{
-		app.MapPost("/upload/document", async (HttpRequest request, ISender sender) =>
+		app.MapPost("/upload/image", async (HttpRequest request, ISender sender) =>
 		{
 			var form = await request.ReadFormAsync();
 			var userId = Convert.ToInt32(form["UserId"]);
-			var files = form.Files.GetFiles("Files");
-			if (files is null || files.Count == 0)
+			var file = form.Files.GetFile("File");
+			if (file is null || file.Length == 0)
 			{
 				return Results.BadRequest("No file uploaded.");
 			}
 			var command = new UploadDocument.Command
 			{
 				UserId = userId,
-				Files = files
+				File = file
 			};
 			var result = await sender.Send(command);
 			if (!result.isSuccess)
@@ -34,8 +34,7 @@ public class UploadDocumentEndpoint : CarterModule
 				return Results.BadRequest(result);
 			}
 			return Results.Ok(result);
-		})
-		.WithTags("Auth")
+		}).WithTags("Auth")
 		.WithOpenApi(operation =>
 		{
 			operation.OperationId = "UploadDocument";
@@ -56,19 +55,14 @@ public class UploadDocumentEndpoint : CarterModule
 											Type = "string",
 											Description = "User ID"
 										},
-										["Files"] = new Microsoft.OpenApi.Models.OpenApiSchema
+										["File"] = new Microsoft.OpenApi.Models.OpenApiSchema
 										{
-											Type = "array",
-											Items = new Microsoft.OpenApi.Models.OpenApiSchema
-												{
-													Type = "string",
-													Format = "binary",
-													Description = "The files to upload"
-												},
-											Description = "The files to upload"
+											Type = "string",
+											Format = "binary",
+											Description = "The file to upload"
 										}
 									},
-									Required = new HashSet<string> { "UserId", "Files" }
+									Required = new HashSet<string> { "UserId", "File" }
 								}
 						}
 				}
@@ -76,30 +70,31 @@ public class UploadDocumentEndpoint : CarterModule
 			return operation;
 		})
 		.Produces<Result<int>>((int)HttpStatusCode.OK)
-		.Produces<Result<List<int>>>((int)HttpStatusCode.BadRequest);
+		.Produces<Result<int>>((int)HttpStatusCode.BadRequest);
 	}
+
 }
 public class UploadDocument
 {
-	public class Command : IRequest<Result<List<int>>>
+	public class Command : IRequest<Result<int>>
 	{
 		public required int UserId { get; set; }
-		public required IReadOnlyList<IFormFile> Files { get; set; }
+		public required IFormFile File { get; set; }
 	}
 
 	public class Validator : AbstractValidator<Command>
 	{
 		public Validator()
 		{
-			RuleFor(c => c.Files)
-				.Must(x => x.Count > 0).WithMessage("Invalid File");
+			RuleFor(c => c.File)
+				.Must(x => x.Length > 0).WithMessage("Invalid File");
 		}
 	}
 	internal sealed class Handler(AccountDbContext accountDbContext,
 		IValidator<Command> validator)
-		: IRequestHandler<Command, Result<List<int>>>
+		: IRequestHandler<Command, Result<int>>
 	{
-		public async Task<Result<List<int>>> Handle(Command request, CancellationToken cancellationToken)
+		public async Task<Result<int>> Handle(Command request, CancellationToken cancellationToken)
 		{
 			var validationResult = await validator.ValidateAsync(request);
 			if (!validationResult.IsValid)
@@ -112,29 +107,24 @@ public class UploadDocument
 			{
 				return new Error("Invalid User");
 			}
-			var userFiles = new List<UserFile>();
-			foreach (var file in request.Files)
+			var userImage = new UserImage
 			{
-				var userFile = new UserFile
-				{
-					Name = file.Name,
-					Type = file.ContentType,
-					UserId = request.UserId
-				};
-				using (MemoryStream ms = new MemoryStream())
-				{
-					// copy the file to memory stream 
-					await file.CopyToAsync(ms);
+				Name = request.File.Name,
+				Type = request.File.ContentType,
+				UserId = request.UserId
+			};
+			using (MemoryStream ms = new MemoryStream())
+			{
+				// copy the file to memory stream 
+				await request.File.CopyToAsync(ms);
 
-					// set the byte array 
-					var fileBytes = ms.ToArray();
-					userFile.Content = Convert.ToBase64String(fileBytes);
-				}
-				userFiles.Add(userFile);
+				// set the byte array 
+				var fileBytes = ms.ToArray();
+				userImage.Content = Convert.ToBase64String(fileBytes);
 			}
-			await accountDbContext.UserFiles.AddRangeAsync(userFiles);
+			await accountDbContext.UserImages.AddAsync(userImage);
 			await accountDbContext.SaveChangesAsync(cancellationToken);
-			return userFiles.Select(x => x.Id).ToList();
+			return userImage.Id;
 		}
 	}
 }

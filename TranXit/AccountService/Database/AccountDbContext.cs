@@ -19,6 +19,8 @@ public partial class AccountDbContext : DbContext
 
 	public virtual DbSet<UserFile> UserFiles { get; set; }
 
+	public virtual DbSet<UserImage> UserImages { get; set; }
+
 	protected override void OnModelCreating(ModelBuilder modelBuilder)
 	{
 		modelBuilder.Entity<Role>(entity =>
@@ -32,7 +34,6 @@ public partial class AccountDbContext : DbContext
 		{
 			entity.Property(e => e.CodeSentAtUtc).HasColumnType("datetime");
 			entity.Property(e => e.Email).HasMaxLength(256);
-			entity.Property(e => e.IsEmailVerified).HasDefaultValue(false);
 			entity.Property(e => e.Phone).HasMaxLength(50);
 			entity.Property(e => e.Provider).HasMaxLength(100);
 			entity.Property(e => e.Username).HasMaxLength(256);
@@ -51,6 +52,21 @@ public partial class AccountDbContext : DbContext
 				.HasForeignKey(d => d.UserId)
 				.OnDelete(DeleteBehavior.ClientSetNull)
 				.HasConstraintName("FK_UserFiles_Users");
+		});
+
+		modelBuilder.Entity<UserImage>(entity =>
+		{
+			entity.HasNoKey();
+
+			entity.HasIndex(e => e.UserId, "UQ__UserImag__1788CC4D528CE71E").IsUnique();
+
+			entity.Property(e => e.Id).ValueGeneratedOnAdd();
+			entity.Property(e => e.Name).HasMaxLength(50);
+			entity.Property(e => e.Type).HasMaxLength(50);
+
+			entity.HasOne(d => d.User).WithOne()
+				.HasForeignKey<UserImage>(d => d.UserId)
+				.HasConstraintName("FK_UserImages_User");
 		});
 
 		OnModelCreatingPartial(modelBuilder);
