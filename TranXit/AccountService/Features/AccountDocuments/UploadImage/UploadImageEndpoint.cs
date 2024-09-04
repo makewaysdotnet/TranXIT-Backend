@@ -2,6 +2,7 @@
 using Carter;
 using FluentValidation;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using SharedServicesManager;
 using System.Net;
 
@@ -59,7 +60,7 @@ public class UploadImageEndpoint : CarterModule
 										{
 											Type = "string",
 											Format = "binary",
-											Description = "The file to upload"
+											Description = "The image to upload"
 										}
 									},
 									Required = new HashSet<string> { "UserId", "File" }
@@ -107,12 +108,26 @@ public class UploadDocument
 			{
 				return new Error("Invalid User");
 			}
-			var userImage = new UserImage
+			var userImage = await accountDbContext.UserImages
+				.SingleOrDefaultAsync(x => x.UserId == request.UserId);
+			var isUpdate = false;
+			if (userImage is not null)
 			{
-				Name = request.File.Name,
-				Type = request.File.ContentType,
-				UserId = request.UserId
-			};
+				userImage.Name = request.File.FileName;
+				userImage.Type = request.File.ContentType;
+				userImage.UserId = request.UserId;
+				isUpdate = true;
+			}
+			else
+			{
+				userImage = new UserImage
+				{
+					Name = request.File.FileName,
+					Type = request.File.ContentType,
+					UserId = request.UserId
+				};
+			}
+
 			using (MemoryStream ms = new MemoryStream())
 			{
 				// copy the file to memory stream 
@@ -121,6 +136,12 @@ public class UploadDocument
 				// set the byte array 
 				var fileBytes = ms.ToArray();
 				userImage.Content = Convert.ToBase64String(fileBytes);
+			}
+			if (isUpdate)
+			{
+				accountDbContext.UserImages.Update(userImage);
+				await accountDbContext.SaveChangesAsync(cancellationToken);
+				return userImage.Id;
 			}
 			await accountDbContext.UserImages.AddAsync(userImage);
 			await accountDbContext.SaveChangesAsync(cancellationToken);

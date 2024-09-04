@@ -2,6 +2,7 @@
 using Carter;
 using FluentValidation;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using SharedServicesManager;
 using System.Net;
 
@@ -75,7 +76,7 @@ public class UploadDocumentEndpoint : CarterModule
 			};
 			return operation;
 		})
-		.Produces<Result<int>>((int)HttpStatusCode.OK)
+		.Produces<Result<List<int>>>((int)HttpStatusCode.OK)
 		.Produces<Result<List<int>>>((int)HttpStatusCode.BadRequest);
 	}
 }
@@ -112,12 +113,20 @@ public class UploadDocument
 			{
 				return new Error("Invalid User");
 			}
-			var userFiles = new List<UserFile>();
+			var userFiles = await accountDbContext.UserFiles
+				.Where(x=> x.UserId == request.UserId)
+				.ToListAsync();
+			if (userFiles.Any())
+			{
+				accountDbContext.UserFiles.RemoveRange(userFiles);
+				await accountDbContext.SaveChangesAsync();
+			}
+			userFiles = new List<UserFile>();
 			foreach (var file in request.Files)
 			{
 				var userFile = new UserFile
 				{
-					Name = file.Name,
+					Name = file.FileName,
 					Type = file.ContentType,
 					UserId = request.UserId
 				};

@@ -56,15 +56,12 @@ public partial class AccountDbContext : DbContext
 
 		modelBuilder.Entity<UserImage>(entity =>
 		{
-			entity.HasNoKey();
-
 			entity.HasIndex(e => e.UserId, "UQ__UserImag__1788CC4D528CE71E").IsUnique();
 
-			entity.Property(e => e.Id).ValueGeneratedOnAdd();
 			entity.Property(e => e.Name).HasMaxLength(50);
 			entity.Property(e => e.Type).HasMaxLength(50);
 
-			entity.HasOne(d => d.User).WithOne()
+			entity.HasOne(d => d.User).WithOne(p => p.UserImage)
 				.HasForeignKey<UserImage>(d => d.UserId)
 				.HasConstraintName("FK_UserImages_User");
 		});
