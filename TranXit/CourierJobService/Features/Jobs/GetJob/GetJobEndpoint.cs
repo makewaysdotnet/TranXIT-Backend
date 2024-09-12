@@ -39,7 +39,7 @@ public class GetJob
 {
 	public sealed class Query : IRequest<Result<List<CustomerJobResult>>>
 	{
-		public int UserId { get; set; }
+		public required int UserId { get; set; }
 	}
 	internal sealed class QueryHandler(CourierJobDbContext jobDbContext)
 		: IRequestHandler<Query, Result<List<CustomerJobResult>>>

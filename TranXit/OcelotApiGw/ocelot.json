@@ -153,6 +153,8 @@
       "UpstreamHttpMethod": [ "Post" ],
       "FileCacheOptions": { "TtlSeconds": 60 }
     },
+    // ********************************* Courier service ******************************
+
     // Create Bid Endpoint
     {
       "DownstreamPathTemplate": "/api/bids",
@@ -167,7 +169,10 @@
       ],
       "UpstreamPathTemplate": "/api/bids",
       "UpstreamHttpMethod": [ "POST" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "FileCacheOptions": { "TtlSeconds": 60 },
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      }
     },
 
     // Get Job User Bids Endpoint
@@ -184,7 +189,10 @@
       ],
       "UpstreamPathTemplate": "/api/bids/{jobId:int}",
       "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "FileCacheOptions": { "TtlSeconds": 60 },
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      }
     },
 
     // Update Bid Job Status Endpoint
@@ -201,7 +209,10 @@
       ],
       "UpstreamPathTemplate": "/api/bids/status",
       "UpstreamHttpMethod": [ "PUT" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "FileCacheOptions": { "TtlSeconds": 60 },
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      }
     },
 
     // Get Cities Endpoint
@@ -218,7 +229,10 @@
       ],
       "UpstreamPathTemplate": "/api/cities/{countryId:int}",
       "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "FileCacheOptions": { "TtlSeconds": 60 },
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      }
     },
 
     // Get Countries Endpoint
@@ -235,7 +249,10 @@
       ],
       "UpstreamPathTemplate": "/api/countries",
       "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "FileCacheOptions": { "TtlSeconds": 60 },
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      }
     },
 
     // Get Courier Modes Endpoint
@@ -252,7 +269,10 @@
       ],
       "UpstreamPathTemplate": "/api/courier-modes",
       "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "FileCacheOptions": { "TtlSeconds": 60 },
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      }
     },
 
     // Get Delivery Types Endpoint
@@ -269,7 +289,10 @@
       ],
       "UpstreamPathTemplate": "/api/delivery-types",
       "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "FileCacheOptions": { "TtlSeconds": 60 },
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      }
     },
 
     // Get Item Types Endpoint
@@ -286,7 +309,10 @@
       ],
       "UpstreamPathTemplate": "/api/item-types",
       "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "FileCacheOptions": { "TtlSeconds": 60 },
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      }
     },
 
     // Get Shipment Types Endpoint
@@ -303,14 +329,17 @@
       ],
       "UpstreamPathTemplate": "/api/shipment-types",
       "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "FileCacheOptions": { "TtlSeconds": 60 },
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      }
     },
 
-    // Create, GET Jobs Endpoint
+    // GET Jobs Endpoint
     {
       "DownstreamPathTemplate": "/api/jobs",
       "DownstreamSchema": "http",
-      "DownstreamHttpMethod": [ "GET", "POST" ],
+      "DownstreamHttpMethod": "GET",
       "RouteIsCaseSensitive": false,
       "DownstreamHostAndPorts": [
         {
@@ -319,8 +348,31 @@
         }
       ],
       "UpstreamPathTemplate": "/api/jobs",
-      "UpstreamHttpMethod": [ "GET", "POST" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "UpstreamHttpMethod": [ "GET" ],
+      "FileCacheOptions": { "TtlSeconds": 60 },
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      }
+    },
+
+    // Create Jobs Endpoint
+    {
+      "DownstreamPathTemplate": "/api/jobs",
+      "DownstreamSchema": "http",
+      "DownstreamHttpMethod": "POST",
+      "RouteIsCaseSensitive": false,
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "courierjobservice",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/jobs",
+      "UpstreamHttpMethod": [ "POST" ],
+      "FileCacheOptions": { "TtlSeconds": 60 },
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      }
     },
 
     // Get Job by Customer Id Endpoint
@@ -337,7 +389,10 @@
       ],
       "UpstreamPathTemplate": "/api/jobs/{customerId:int}",
       "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "FileCacheOptions": { "TtlSeconds": 60 },
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      }
     },
 
     // Get Job Bid Stats Endpoint
@@ -354,7 +409,10 @@
       ],
       "UpstreamPathTemplate": "/api/jobs/{jobId:int}/bid-stats",
       "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "FileCacheOptions": { "TtlSeconds": 60 },
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      }
     },
 
     // Get Job Details Endpoint
@@ -371,7 +429,10 @@
       ],
       "UpstreamPathTemplate": "/api/jobs/{jobId:int}/details",
       "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "FileCacheOptions": { "TtlSeconds": 60 },
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      }
     },
 
     // Get Job Stats Endpoint
@@ -388,7 +449,10 @@
       ],
       "UpstreamPathTemplate": "/api/jobs/stats",
       "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "FileCacheOptions": { "TtlSeconds": 60 },
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      }
     },
 
     // Get Job Stats Endpoint
@@ -405,7 +469,10 @@
       ],
       "UpstreamPathTemplate": "/api/jobs/status",
       "UpstreamHttpMethod": [ "PUT" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "FileCacheOptions": { "TtlSeconds": 60 },
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      }
     }
   ],
   "GlobalConfiguration": {
