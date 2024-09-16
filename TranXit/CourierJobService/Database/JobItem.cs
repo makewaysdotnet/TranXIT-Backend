@@ -27,4 +27,6 @@ public partial class JobItem
     public virtual ItemType? ItemType { get; set; }
 
     public virtual Job? Job { get; set; }
+
+    public virtual JobItemImage? JobItemImage { get; set; }
 }

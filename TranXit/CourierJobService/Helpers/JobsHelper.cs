@@ -69,5 +69,23 @@ namespace CourierJobService.Helpers
 				return ((int)JobStatusEnum.None, JobStatusEnum.None.ToString());
 			}
 		}
+
+		public static DateTime? GetJobDeliveryDate(Job job, ICollection<Bidding>? biddings, int? userId)
+		{
+			if ((!Convert.ToBoolean(job.IsJobStatusFromBid) && job.JobStatus is not null) ||
+				(!Convert.ToBoolean(job.IsJobStatusFromBid) && job.JobStatus is null))
+			{
+				return biddings?.SelectMany(x=>x.BiddingProposals).Min(x=>x.DeliveryDateUtc);
+			}
+			else if (Convert.ToBoolean(job.IsJobStatusFromBid) &&
+					userId is not null &&
+					biddings is not null &&
+					biddings.Any())
+			{
+				return biddings.FirstOrDefault(b => b.UserId == userId)!.BiddingProposals.Min(y=>y.DeliveryDateUtc);
+			}
+			return null;
+		}
+
 	}
 }

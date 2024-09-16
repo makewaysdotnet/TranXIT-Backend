@@ -1,4 +1,6 @@
-﻿namespace CourierJobService.Features.Jobs.GetJobDetail
+﻿using SharedServicesManager;
+
+namespace CourierJobService.Features.Jobs.GetJobDetail
 {
     public class JobDetailResult
     {
@@ -26,5 +28,6 @@
         public int? Quantity { get; init; }
         public string Size { get; init; } = string.Empty;
         public string Description { get; init; } = string.Empty;
+        public ImageResult? ImageResult { get; init; } 
     }
 }

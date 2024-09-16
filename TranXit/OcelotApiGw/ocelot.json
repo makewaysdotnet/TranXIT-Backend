@@ -473,6 +473,26 @@
       "AuthenticationOptions": {
         "AuthenticationProviderKey": "Bearer"
       }
+    },
+
+    // Upload Job Item Image API
+    {
+      "DownstreamPathTemplate": "/api/jobs/job-item-image",
+      "DownstreamSchema": "http",
+      "DownstreamHttpMethod": "POST",
+      "RouteIsCaseSensitive": false,
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "courierjobservice",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/jobs/job-item-image",
+      "UpstreamHttpMethod": [ "Post" ],
+      "FileCacheOptions": { "TtlSeconds": 60 },
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      }
     }
   ],
   "GlobalConfiguration": {

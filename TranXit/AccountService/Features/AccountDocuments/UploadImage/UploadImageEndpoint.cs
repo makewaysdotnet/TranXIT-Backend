@@ -24,7 +24,7 @@ public class UploadImageEndpoint : CarterModule
 			{
 				return Results.BadRequest("No file uploaded.");
 			}
-			var command = new UploadDocument.Command
+			var command = new UploadImage.Command
 			{
 				UserId = userId,
 				File = file
@@ -75,7 +75,7 @@ public class UploadImageEndpoint : CarterModule
 	}
 
 }
-public class UploadDocument
+public class UploadImage
 {
 	public class Command : IRequest<Result<int>>
 	{

@@ -56,6 +56,7 @@ public class GetJob
 				.Include(x => x.OriginCountry)
 				.Include(x => x.JobStatus)
 				.Include(x => x.Biddings).ThenInclude(y => y.JobStatus)
+				.Include(x => x.Biddings).ThenInclude(y => y.BiddingProposals)
 				.AsSplitQuery()
 				.AsNoTracking()
 				.Select(x => new CustomerJobResult
@@ -70,6 +71,7 @@ public class GetJob
 					JobNumber = x.JobNumber,
 					OriginAddress = x.OriginAddress,
 					DestinationAddress = x.DestinationAddress,
+					DeliveryDateUtc = JobsHelper.GetJobDeliveryDate(x, x.Biddings, null),
 					StatusId = JobsHelper.GetJobStatus(x, x.Biddings, null).Item1,
 					Status = JobsHelper.GetJobStatus(x, x.Biddings, null).Item2,
 				})

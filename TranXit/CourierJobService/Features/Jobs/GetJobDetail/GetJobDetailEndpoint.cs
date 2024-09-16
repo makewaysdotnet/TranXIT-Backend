@@ -94,6 +94,13 @@ public class GetJobDetail
 					Quantity = y.Quantity ?? 0,
 					Size = y.Dimensions ?? string.Empty,
 					Weight = y.Weight ?? 0.0,
+					ImageResult = new ImageResult
+					{
+						Id = y.JobItemImage?.JobItemId,
+						Name = y.JobItemImage?.Name,
+						Content = y.JobItemImage?.Content,
+						Type = y.JobItemImage?.Type
+					}
 				})
 			};
 
