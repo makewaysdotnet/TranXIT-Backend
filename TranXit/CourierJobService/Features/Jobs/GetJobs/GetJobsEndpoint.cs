@@ -61,23 +61,7 @@ public class GetJob
 				.Include(x => x.Biddings).ThenInclude(y => y.JobStatus)
 				.AsSplitQuery()
 				.AsNoTracking()
-				.Select(x => new JobResult
-				{
-					Id = x.Id,
-					CustomerId = x.UserId,
-					CreatedOnUtc = x.CreatedOnUtc,
-					OriginCountry = x.OriginCountry!.CountryName,
-					DestinationCountry = x.DestinationCountry!.CountryName,
-					OriginCity = x.OriginCity!.CityName,
-					DestinationCity = x.DestinationCity!.CityName,
-					Status = JobsHelper.GetJobStatus(x, x.Biddings, request.UserId).Item2,
-					StatusId = JobsHelper.GetJobStatus(x, x.Biddings, request.UserId).Item1,
-					JobNumber = x.JobNumber,
-					MaxBid = x.Biddings.Max(y => y.TotalAmount),
-					MinBid = x.Biddings.Min(y => y.TotalAmount),
-					YourBid = x.Biddings.FirstOrDefault(y => y.UserId == request.UserId)!.TotalAmount,
-					RemainingTime = JobsHelper.GetJobRemainingTime(x.ExpiryDateUtc, currentTime)
-				});
+				.Select(x => MapToJobResult(x, request.UserId, currentTime));
 
 			if (jobsQuery is null)
 			{
@@ -86,6 +70,29 @@ public class GetJob
 			var paginatedResponse = await Pagination<JobResult>
 				.CreateAsync(jobsQuery, request.Page, request.PageSize);
 			return paginatedResponse;
+		}
+
+		private static JobResult MapToJobResult(Job job, int userId, DateTime currentTime)
+		{
+			var status = JobsHelper.GetJobStatus(job, job.Biddings, userId);
+			return new JobResult
+			{
+				Id = job.Id,
+				CustomerId = job.UserId,
+				CreatedOnUtc = job.CreatedOnUtc,
+				OriginCountry = job.OriginCountry?.CountryName,
+				DestinationCountry = job.DestinationCountry?.CountryName,
+				OriginCity = job.OriginCity?.CityName,
+				DestinationCity = job.DestinationCity?.CityName,
+				Status = status.Item2,
+				StatusId = status.Item1,
+				JobNumber = job.JobNumber,
+				MaxBid = job.Biddings.Any() ? job.Biddings.Max(y => y.TotalAmount) : 0,
+				MinBid = job.Biddings.Any() ? job.Biddings.Min(y => y.TotalAmount) : 0,
+				YourBid = job.Biddings.Any() ? 
+					job.Biddings.FirstOrDefault(y => y.UserId == userId)?.TotalAmount : 0,
+				RemainingTime = JobsHelper.GetJobRemainingTime(job.ExpiryDateUtc, currentTime)
+			};
 		}
 	}
 }

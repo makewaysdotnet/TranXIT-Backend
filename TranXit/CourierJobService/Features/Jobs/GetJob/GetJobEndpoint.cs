@@ -59,22 +59,7 @@ public class GetJob
 				.Include(x => x.Biddings).ThenInclude(y => y.BiddingProposals)
 				.AsSplitQuery()
 				.AsNoTracking()
-				.Select(x => new CustomerJobResult
-				{
-					Id = x.Id,
-					CreatedOnUtc = x.CreatedOnUtc,
-					CustomerId = x.UserId,
-					DestinationCity = x.DestinationCity!.CityName,
-					DestinationCountry = x.DestinationCountry!.CountryName,
-					OriginCountry = x.OriginCountry!.CountryName,
-					OriginCity = x.OriginCity!.CityName,
-					JobNumber = x.JobNumber,
-					OriginAddress = x.OriginAddress,
-					DestinationAddress = x.DestinationAddress,
-					DeliveryDateUtc = JobsHelper.GetJobDeliveryDate(x, x.Biddings, null),
-					StatusId = JobsHelper.GetJobStatus(x, x.Biddings, null).Item1,
-					Status = JobsHelper.GetJobStatus(x, x.Biddings, null).Item2,
-				})
+				.Select(job => MapToCustomerJobResult(job))
 				.ToListAsync(cancellationToken);
 
 			if (jobResponse.Count is 0)
@@ -83,5 +68,28 @@ public class GetJob
 			}
 			return jobResponse;
 		}
+
+		private static CustomerJobResult MapToCustomerJobResult(Job job)
+		{
+			var statusData = JobsHelper.GetJobStatus(job, job.Biddings, null);
+			return new CustomerJobResult
+			{
+				Id = job.Id,
+				CreatedOnUtc = job.CreatedOnUtc,
+				CustomerId = job.UserId,
+				Comments = job.Comments,
+				DestinationCity = job.DestinationCity?.CityName,
+				DestinationCountry = job.DestinationCountry?.CountryName,
+				OriginCountry = job.OriginCountry?.CountryName,
+				OriginCity = job.OriginCity?.CityName,
+				JobNumber = job.JobNumber,
+				OriginAddress = job.OriginAddress,
+				DestinationAddress = job.DestinationAddress,
+				DeliveryDateUtc = JobsHelper.GetJobDeliveryDate(job, job.Biddings, null),
+				StatusId = statusData.Item1,
+				Status = statusData.Item2,
+			};
+		}
+
 	}
 }

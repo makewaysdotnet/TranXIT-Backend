@@ -15,5 +15,6 @@
         public string? Status { get; init; }
         public int? StatusId { get; init; }
 		public DateTime? DeliveryDateUtc { get; init; }
+		public string? Comments { get; init; }
 	}
 }
