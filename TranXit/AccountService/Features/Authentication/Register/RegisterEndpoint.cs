@@ -23,7 +23,7 @@ public class RegisterEndpoint : CarterModule
 		{
 			var command = request.Adapt<AccountRegister.Command>();
 			var result = await sender.Send(command);
-			if (!result.isSuccess)
+			if (!result.isSuccess && result.value is null)
 			{
 				return Results.BadRequest(result);
 			}
@@ -65,9 +65,10 @@ public class AccountRegister
 					.WithMessage("Your password must contain at least one lowercase letter.")
 					.Matches(@"[0-9]+")
 					.WithMessage("Your password must contain at least one number.")
-					.Matches(@"[\!\?\@\-\*\.]+")
-					.WithMessage("Your password must contain at least one (!*?-@.)");
-			RuleFor(c => c.ConfirmPassword).Matches(v => v.Password);
+					.Matches(@"[!@#$%^&*(),.?""{}|<>]+")
+					.WithMessage("Your password must contain at least one special character");
+			RuleFor(c => c.ConfirmPassword)
+				.Equal(c => c.Password).WithMessage("Passwords do not match.");
 			RuleFor(c => c.Username)
 				.NotEmpty().WithMessage("Your username cannot be empty");
 		}
@@ -83,18 +84,32 @@ public class AccountRegister
 		public async Task<Result<LoginResult>> Handle(Command request, CancellationToken cancellationToken)
 		{
 			var validationResult = await validator.ValidateAsync(request);
+
 			if (!validationResult.IsValid)
 			{
 				return new Error(validationResult.ToString());
 			}
+
 			var user = await accountDbContext
 				.Users
 				.FirstOrDefaultAsync(x => x.Email == request.Email, cancellationToken);
-			if (user is not null)
+
+			if (user is not null && Convert.ToBoolean(user.IsEmailVerified))
 			{
 				return new Error("User already exist");
 			}
+
+			if (user is not null && !Convert.ToBoolean(user.IsEmailVerified))
+			{
+				var data = new LoginResult
+				{
+					IsEmailVerified = Convert.ToBoolean(user.IsEmailVerified)
+				};
+				return new Error("User already exist but not verified", data);
+			}
+
 			var passwordHash = BC.EnhancedHashPassword(request.Password);
+
 			user = new User
 			{
 				Email = request.Email,
@@ -103,6 +118,7 @@ public class AccountRegister
 				Username = request.Username,
 				Phone = request.Phone
 			};
+
 			await accountDbContext.AddAsync(user);
 			await accountDbContext.SaveChangesAsync(cancellationToken);
 
@@ -133,7 +149,7 @@ public class AccountRegister
 				Name = user.Username,
 				RoleId = user.RoleId,
 				Role = user.Role is not null ? user.Role.Name! : null,
-				IsEmailVerified = user.IsEmailVerified is null ? false : (bool)user.IsEmailVerified!,
+				IsEmailVerified = Convert.ToBoolean(user.IsEmailVerified)
 			};
 		}
 	}

@@ -1,6 +1,6 @@
 ﻿namespace SharedServicesManager
 {
-	public sealed class Error(string error)
+	public sealed class Error(string error, object? optionalValue = default)
 	{
 		public IEnumerable<string> errors
 		{
@@ -11,6 +11,8 @@
 					: Enumerable.Empty<string>();
 			}
 		}
+
+		public object? value {  get { return optionalValue; } } 
 	}
 	public class Result<TValue>
 	{
@@ -29,7 +31,7 @@
 		private Result(Error _error)
 		{
 			isSuccess = false;
-			value = default;
+			value = _error.value is not null ? (TValue)_error.value : default;
 			error = _error.errors;
 		}
 

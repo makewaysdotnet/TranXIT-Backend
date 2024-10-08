@@ -153,6 +153,22 @@
       "UpstreamHttpMethod": [ "Post" ],
       "FileCacheOptions": { "TtlSeconds": 60 }
     },
+    // Reset Password API
+    {
+      "DownstreamPathTemplate": "/api/reset-password",
+      "DownstreamSchema": "http",
+      "DownstreamHttpMethod": "POST",
+      "RouteIsCaseSensitive": false,
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "accountservice",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/reset-password",
+      "UpstreamHttpMethod": [ "Post" ],
+      "FileCacheOptions": { "TtlSeconds": 60 }
+    },
     // ********************************* Courier service ******************************
 
     // Create Bid Endpoint
