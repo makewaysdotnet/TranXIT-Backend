@@ -1,48 +1,97 @@
-version: '3.4'
 networks:
   backend:
     driver: bridge
 
+volumes:
+  tranxit-sql-data:
+  tranxit-rabbitmq-data:
+
 services:
   ocelotapigw:
-    image: api-gateway-image
+    image: tranxit-api-gateway
     build:
       context: .
       dockerfile: OcelotApiGw/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_HTTP_PORTS=8080
+      - AllowedOrigins__0=http://localhost:3000
+      - AllowedOrigins__1=https://localhost:3000
+      - SharedJwtSecrets__Key=${TRANXIT_JWT_SECRET:-TranXIT-local-development-secret-key-please-change}
     ports:
-    - 61260:8080
+      - "${TRANXIT_GATEWAY_PORT:-8088}:8080"
     networks:
-    - backend
+      - backend
+    depends_on:
+      - accountservice
+      - courierjobservice
 
   accountservice:
-    image: account-service-image
+    image: tranxit-account-service
     build:
       context: .
       dockerfile: AccountService/Dockerfile
     environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_HTTP_PORTS=8080
+      - AllowedOrigins__0=http://localhost:3000
+      - AllowedOrigins__1=https://localhost:3000
+      - ConnectionStrings__Database=Server=sqlserver,1433;Database=Tranxit_Account;User Id=sa;Password=${TRANXIT_SA_PASSWORD:-TranXit_dev_2026!};TrustServerCertificate=True;Encrypt=False
       - RabbitMQ__HostName=rabbitmq
+      - RabbitMQ__UserName=guest
+      - RabbitMQ__Password=guest
+      - SharedJwtSecrets__Key=${TRANXIT_JWT_SECRET:-TranXIT-local-development-secret-key-please-change}
+      - MailSettings__DisableSending=true
     networks:
-    - backend
+      - backend
     depends_on:
-      - rabbitmq
-
+      sqlserver:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
 
   courierjobservice:
-    image: courierjob-sevice-image
+    image: tranxit-courierjob-service
     build:
       context: .
       dockerfile: CourierJobService/Dockerfile
     environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_HTTP_PORTS=8080
+      - AllowedOrigins__0=http://localhost:3000
+      - AllowedOrigins__1=https://localhost:3000
+      - ConnectionStrings__Database=Server=sqlserver,1433;Database=Tranxit_CourierJob;User Id=sa;Password=${TRANXIT_SA_PASSWORD:-TranXit_dev_2026!};TrustServerCertificate=True;Encrypt=False
       - RabbitMQ__HostName=rabbitmq
+      - RabbitMQ__UserName=guest
+      - RabbitMQ__Password=guest
+      - SharedJwtSecrets__Key=${TRANXIT_JWT_SECRET:-TranXIT-local-development-secret-key-please-change}
+      - MailSettings__DisableSending=true
     networks:
-    - backend
+      - backend
     depends_on:
-      - rabbitmq
+      sqlserver:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
+
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=${TRANXIT_SA_PASSWORD:-TranXit_dev_2026!}
+    ports:
+      - "${TRANXIT_SQL_PORT:-1433}:1433"
+    volumes:
+      - tranxit-sql-data:/var/opt/mssql
+    networks:
+      - backend
 
   rabbitmq:
-    image: "rabbitmq:3-management"
+    image: rabbitmq:3-management
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "${TRANXIT_RABBITMQ_PORT:-5672}:5672"
+      - "${TRANXIT_RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - tranxit-rabbitmq-data:/var/lib/rabbitmq
     networks:
       - backend

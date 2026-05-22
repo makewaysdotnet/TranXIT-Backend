@@ -10,7 +10,7 @@ namespace CourierJobService.Features.Dropdowns.ShipmentTypes.GetShipmentTypes;
 public class GetShipmentTypesEndpoint : CarterModule
 {
 	public GetShipmentTypesEndpoint()
-	: base("/courierjobservice")
+	: base("/api")
 	{ }
 	public override void AddRoutes(IEndpointRouteBuilder app)
 	{

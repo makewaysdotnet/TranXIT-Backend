@@ -10,7 +10,7 @@ namespace CourierJobService.Features.Dropdowns.CourierModes.GetCourierModes;
 public class GetCourierModesEndpoint : CarterModule
 {
     public GetCourierModesEndpoint()
-    : base("/courierjobservice")
+    : base("/api")
     { }
     public override void AddRoutes(IEndpointRouteBuilder app)
     {

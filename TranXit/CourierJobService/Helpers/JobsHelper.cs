@@ -34,15 +34,15 @@ namespace CourierJobService.Helpers
 			   (expiryDateUtc - currentTime)!.Value.TotalSeconds > 0 ?
 			   (expiryDateUtc - currentTime)!.Value.TotalSeconds : 0;
 
-		public static string GetJobStatus(Job job, ICollection<Bidding>? biddings, int? userId)
+		public static (int, string) GetJobStatus(Job job, ICollection<Bidding>? biddings, int? userId)
 		{
 			if (!Convert.ToBoolean(job.IsJobStatusFromBid) && job.JobStatus is not null)
 			{
-				return job.JobStatus!.Status!;
+				return (job.JobStatus!.Id!, job.JobStatus!.Status!);
 			}
 			else if (!Convert.ToBoolean(job.IsJobStatusFromBid) && job.JobStatus is null)
 			{
-				return JobStatusEnum.None.ToString();
+				return ((int)JobStatusEnum.None, JobStatusEnum.None.ToString());
 			}
 			else if (Convert.ToBoolean(job.IsJobStatusFromBid) &&
 					userId is not null &&
@@ -51,7 +51,8 @@ namespace CourierJobService.Helpers
 					biddings.FirstOrDefault(b => b.UserId == userId) != null &&
 					biddings.FirstOrDefault(b => b.UserId == userId)!.JobStatus != null)
 			{
-				return biddings.FirstOrDefault(b => b.UserId == userId)!.JobStatus!.Status!;
+				return (biddings.FirstOrDefault(b => b.UserId == userId)!.JobStatus!.Id!,
+					biddings.FirstOrDefault(b => b.UserId == userId)!.JobStatus!.Status!);
 			}
 			else if (Convert.ToBoolean(job.IsJobStatusFromBid) &&
 					userId is null &&
@@ -60,12 +61,31 @@ namespace CourierJobService.Helpers
 					biddings.FirstOrDefault(b => b.JobStatusId != (int)JobStatusEnum.Lost) != null &&
 					biddings.FirstOrDefault(b => b.JobStatusId != (int)JobStatusEnum.Lost)!.JobStatus != null)
 			{
-				return biddings.FirstOrDefault(b => b.JobStatusId == (int)JobStatusEnum.Lost)!.JobStatus!.Status!;
+				return (biddings.FirstOrDefault(b => b.JobStatusId == (int)JobStatusEnum.Lost)!.JobStatus!.Id!,
+					biddings.FirstOrDefault(b => b.JobStatusId == (int)JobStatusEnum.Lost)!.JobStatus!.Status!);
 			}
 			else
 			{
-				return JobStatusEnum.None.ToString();
+				return ((int)JobStatusEnum.None, JobStatusEnum.None.ToString());
 			}
 		}
+
+		public static DateTime? GetJobDeliveryDate(Job job, ICollection<Bidding>? biddings, int? userId)
+		{
+			if ((!Convert.ToBoolean(job.IsJobStatusFromBid) && job.JobStatus is not null) ||
+				(!Convert.ToBoolean(job.IsJobStatusFromBid) && job.JobStatus is null))
+			{
+				return biddings?.SelectMany(x=>x.BiddingProposals).Min(x=>x.DeliveryDateUtc);
+			}
+			else if (Convert.ToBoolean(job.IsJobStatusFromBid) &&
+					userId is not null &&
+					biddings is not null &&
+					biddings.Any())
+			{
+				return biddings.FirstOrDefault(b => b.UserId == userId)!.BiddingProposals.Min(y=>y.DeliveryDateUtc);
+			}
+			return null;
+		}
+
 	}
 }

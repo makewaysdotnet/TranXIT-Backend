@@ -23,8 +23,21 @@ builder.Services.Configure<MailSettings>(builder.Configuration.GetSection("MailS
 builder.Services.AddJwtAuthentication(builder.Configuration);
 builder.Services.AddAuthorization(options =>
 {
-	options.AddPolicy("CourierPolicy", policy => policy.RequireRole("Courier"));
-	options.AddPolicy("CustomerPolicy", policy => policy.RequireRole("Customer"));
+	options.AddPolicy("CustomerCourierPolicy", policy =>
+	{
+		policy.RequireAuthenticatedUser();
+		policy.RequireRole("Courier", "Customer");
+	});
+	options.AddPolicy("CourierPolicy", policy =>
+	{
+		policy.RequireAuthenticatedUser();
+		policy.RequireRole("Courier");
+	});
+	options.AddPolicy("CustomerPolicy", policy =>
+	{
+		policy.RequireAuthenticatedUser();
+		policy.RequireRole("Customer");
+	});
 });
 //builder.Services.AddAntiforgery();
 
@@ -85,6 +98,7 @@ var app = builder.Build();
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
+	await AccountDevelopmentSeeder.SeedAsync(app.Services);
 	app.UseSwagger();
 	app.UseSwaggerUI();
 }

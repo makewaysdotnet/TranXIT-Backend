@@ -11,7 +11,7 @@ namespace CourierJobService.Features.Dropdowns.Countries.GetCountries;
 public class GetCountriesEndpoint : CarterModule
 {
 	public GetCountriesEndpoint()
-	: base("/courierjobservice")
+	: base("/api")
 	{ }
 	public override void AddRoutes(IEndpointRouteBuilder app)
 	{

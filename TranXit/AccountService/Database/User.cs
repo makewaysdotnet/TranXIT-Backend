@@ -25,4 +25,6 @@ public partial class User
 	public virtual Role? Role { get; set; }
 
 	public virtual ICollection<UserFile> UserFiles { get; set; } = new List<UserFile>();
+
+	public virtual UserImage? UserImage { get; set; }
 }

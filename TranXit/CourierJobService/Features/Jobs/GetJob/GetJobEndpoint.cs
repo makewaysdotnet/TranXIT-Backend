@@ -12,7 +12,7 @@ namespace CourierJobService.Features.Jobs.GetJob;
 public class GetJobEndpoint : CarterModule
 {
 	public GetJobEndpoint()
-	: base("/courierjobservice")
+	: base("/api")
 	{ }
 	public override void AddRoutes(IEndpointRouteBuilder app)
 	{
@@ -39,7 +39,7 @@ public class GetJob
 {
 	public sealed class Query : IRequest<Result<List<CustomerJobResult>>>
 	{
-		public int UserId { get; set; }
+		public required int UserId { get; set; }
 	}
 	internal sealed class QueryHandler(CourierJobDbContext jobDbContext)
 		: IRequestHandler<Query, Result<List<CustomerJobResult>>>
@@ -56,23 +56,10 @@ public class GetJob
 				.Include(x => x.OriginCountry)
 				.Include(x => x.JobStatus)
 				.Include(x => x.Biddings).ThenInclude(y => y.JobStatus)
+				.Include(x => x.Biddings).ThenInclude(y => y.BiddingProposals)
 				.AsSplitQuery()
 				.AsNoTracking()
-				.Select(x => new CustomerJobResult
-				{
-					Id = x.Id,
-					CreatedOnUtc = x.CreatedOnUtc,
-					CustomerId = x.UserId,
-					DestinationCity = x.DestinationCity!.CityName,
-					DestinationCountry = x.DestinationCountry!.CountryName,
-					OriginCountry = x.OriginCountry!.CountryName,
-					OriginCity = x.OriginCity!.CityName,
-					JobNumber = x.JobNumber,
-					OriginAddress = x.OriginAddress,
-					DestinationAddress = x.DestinationAddress,
-					StatusId = x.JobStatusId,
-					Status = JobsHelper.GetJobStatus(x, x.Biddings, null),
-				})
+				.Select(job => MapToCustomerJobResult(job))
 				.ToListAsync(cancellationToken);
 
 			if (jobResponse.Count is 0)
@@ -81,5 +68,28 @@ public class GetJob
 			}
 			return jobResponse;
 		}
+
+		private static CustomerJobResult MapToCustomerJobResult(Job job)
+		{
+			var statusData = JobsHelper.GetJobStatus(job, job.Biddings, null);
+			return new CustomerJobResult
+			{
+				Id = job.Id,
+				CreatedOnUtc = job.CreatedOnUtc,
+				CustomerId = job.UserId,
+				Comments = job.Comments,
+				DestinationCity = job.DestinationCity?.CityName,
+				DestinationCountry = job.DestinationCountry?.CountryName,
+				OriginCountry = job.OriginCountry?.CountryName,
+				OriginCity = job.OriginCity?.CityName,
+				JobNumber = job.JobNumber,
+				OriginAddress = job.OriginAddress,
+				DestinationAddress = job.DestinationAddress,
+				DeliveryDateUtc = JobsHelper.GetJobDeliveryDate(job, job.Biddings, null),
+				StatusId = statusData.Item1,
+				Status = statusData.Item2,
+			};
+		}
+
 	}
 }

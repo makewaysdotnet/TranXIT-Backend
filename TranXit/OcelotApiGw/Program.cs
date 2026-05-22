@@ -11,7 +11,8 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddJwtAuthentication(builder.Configuration);
 builder.Services.AddAuthorization();
 
-builder.Configuration.SetBasePath(builder.Environment.ContentRootPath)
+builder.Configuration
+	.SetBasePath(builder.Environment.ContentRootPath)
 	.AddJsonFile("ocelot.json", optional: false, reloadOnChange: true)
 	.AddEnvironmentVariables();
 // Add services to the container.

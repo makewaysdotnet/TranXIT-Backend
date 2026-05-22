@@ -12,8 +12,8 @@ namespace SharedServicesManager.Helpers
 		public int Generate6DRandomCode()
 		{
 			Random generator = new Random();
-			string randomNumber = generator.Next(0, 1000000).ToString("D6");
-			if (randomNumber.Length is 5)
+			string randomNumber = generator.Next(100000, 1000000).ToString();
+			if (randomNumber.Length == 5)
 			{
 				randomNumber += "0";
 			}

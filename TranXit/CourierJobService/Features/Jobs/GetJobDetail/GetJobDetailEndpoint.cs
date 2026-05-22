@@ -14,7 +14,7 @@ namespace CourierJobService.Features.Jobs.GetJobDetail;
 public class GetJobDetailEndpoint : CarterModule
 {
 	public GetJobDetailEndpoint()
-	: base("/courierjobservice")
+	: base("/api")
 	{ }
 	public override void AddRoutes(IEndpointRouteBuilder app)
 	{
@@ -83,8 +83,8 @@ public class GetJobDetail
 				PickupDateUtc = jobDetail.PickupDateUtc,
 				JobNumber = jobDetail.JobNumber,
 				Status = currentUserRole == "Customer" ?
-					JobsHelper.GetJobStatus(jobDetail, jobDetail.Biddings, null) :
-					JobsHelper.GetJobStatus(jobDetail, jobDetail.Biddings, HttpContextUser.GetCurrentUserId(httpContext)),
+					JobsHelper.GetJobStatus(jobDetail, jobDetail.Biddings, null).Item2 :
+					JobsHelper.GetJobStatus(jobDetail, jobDetail.Biddings, HttpContextUser.GetCurrentUserId(httpContext)).Item2,
 				JobItems = jobDetail.JobItems!.Select(y => new JobItemResult
 				{
 					JobItemId = y.Id,
@@ -94,6 +94,13 @@ public class GetJobDetail
 					Quantity = y.Quantity ?? 0,
 					Size = y.Dimensions ?? string.Empty,
 					Weight = y.Weight ?? 0.0,
+					ImageResult = new ImageResult
+					{
+						Id = y.JobItemImage?.JobItemId,
+						Name = y.JobItemImage?.Name,
+						Content = y.JobItemImage?.Content,
+						Type = y.JobItemImage?.Type
+					}
 				})
 			};
 

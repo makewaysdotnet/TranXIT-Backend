@@ -2,9 +2,9 @@
 using Carter;
 using FluentValidation;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using SharedServicesManager;
 using System.Net;
-using System.Security.Claims;
 
 namespace AccountService.Features.AccountDocuments.UploadDocument;
 
@@ -15,9 +15,20 @@ public class UploadDocumentEndpoint : CarterModule
 	{ }
 	public override void AddRoutes(IEndpointRouteBuilder app)
 	{
-		app.MapPost("/upload", async (IFormFile file, ISender sender) =>
+		app.MapPost("/upload/document", async (HttpRequest request, ISender sender) =>
 		{
-			var command = new UploadDocument.Command { File = file };
+			var form = await request.ReadFormAsync();
+			var userId = Convert.ToInt32(form["UserId"]);
+			var files = form.Files.GetFiles("Files");
+			if (files is null || files.Count == 0)
+			{
+				return Results.BadRequest("No file uploaded.");
+			}
+			var command = new UploadDocument.Command
+			{
+				UserId = userId,
+				Files = files
+			};
 			var result = await sender.Send(command);
 			if (!result.isSuccess)
 			{
@@ -25,64 +36,114 @@ public class UploadDocumentEndpoint : CarterModule
 			}
 			return Results.Ok(result);
 		})
-		.RequireAuthorization()
-		.DisableAntiforgery()
-		.WithOpenApi()
 		.WithTags("Auth")
-		.Produces<Result<int>>((int)HttpStatusCode.OK)
-		.Produces<Result<int>>((int)HttpStatusCode.BadRequest);
+		.WithOpenApi(operation =>
+		{
+			operation.OperationId = "UploadDocument";
+			operation.Summary = "Uploads a document.";
+			operation.RequestBody = new Microsoft.OpenApi.Models.OpenApiRequestBody
+			{
+				Content =
+				{
+					["multipart/form-data"] = new Microsoft.OpenApi.Models.OpenApiMediaType
+						{
+							Schema = new Microsoft.OpenApi.Models.OpenApiSchema
+								{
+									Type = "object",
+									Properties =
+									{
+										["UserId"] = new Microsoft.OpenApi.Models.OpenApiSchema
+										{
+											Type = "string",
+											Description = "User ID"
+										},
+										["Files"] = new Microsoft.OpenApi.Models.OpenApiSchema
+										{
+											Type = "array",
+											Items = new Microsoft.OpenApi.Models.OpenApiSchema
+												{
+													Type = "string",
+													Format = "binary",
+													Description = "The files to upload"
+												},
+											Description = "The files to upload"
+										}
+									},
+									Required = new HashSet<string> { "UserId", "Files" }
+								}
+						}
+				}
+			};
+			return operation;
+		})
+		.Produces<Result<List<int>>>((int)HttpStatusCode.OK)
+		.Produces<Result<List<int>>>((int)HttpStatusCode.BadRequest);
 	}
 }
 public class UploadDocument
 {
-	public class Command : IRequest<Result<int>>
+	public class Command : IRequest<Result<List<int>>>
 	{
-		public required IFormFile File { get; set; }
+		public required int UserId { get; set; }
+		public required IReadOnlyList<IFormFile> Files { get; set; }
 	}
 
 	public class Validator : AbstractValidator<Command>
 	{
 		public Validator()
 		{
-			RuleFor(c => c.File)
-				.Must(x => x.Length > 0).WithMessage("Invalid File");
+			RuleFor(c => c.Files)
+				.Must(x => x.Count > 0).WithMessage("Invalid File");
 		}
 	}
 	internal sealed class Handler(AccountDbContext accountDbContext,
-		IValidator<Command> validator,
-		IHttpContextAccessor httpContextAccessor)
-		: IRequestHandler<Command, Result<int>>
+		IValidator<Command> validator)
+		: IRequestHandler<Command, Result<List<int>>>
 	{
-		public async Task<Result<int>> Handle(Command request, CancellationToken cancellationToken)
+		public async Task<Result<List<int>>> Handle(Command request, CancellationToken cancellationToken)
 		{
 			var validationResult = await validator.ValidateAsync(request);
 			if (!validationResult.IsValid)
 			{
 				return new Error(validationResult.ToString());
 			}
-			var userId = httpContextAccessor.HttpContext?.User.FindFirstValue("UserId");
-			if (userId is null)
+
+			var user = await accountDbContext.Users.FindAsync(request.UserId);
+			if (user is null)
 			{
 				return new Error("Invalid User");
 			}
-			var userFile = new UserFile
+			var userFiles = await accountDbContext.UserFiles
+				.Where(x=> x.UserId == request.UserId)
+				.ToListAsync();
+			if (userFiles.Any())
 			{
-				Name = request.File.Name,
-				Type = request.File.ContentType,
-				UserId = int.Parse(userId)
-			};
-			using (MemoryStream ms = new MemoryStream())
-			{
-				// copy the file to memory stream 
-				await request.File.CopyToAsync(ms);
-
-				// set the byte array 
-				var fileBytes = ms.ToArray();
-				userFile.Content = Convert.ToBase64String(fileBytes);
+				accountDbContext.UserFiles.RemoveRange(userFiles);
+				await accountDbContext.SaveChangesAsync();
 			}
-			accountDbContext.UserFiles.Add(userFile);
+			userFiles = new List<UserFile>();
+			foreach (var file in request.Files)
+			{
+				var userFile = new UserFile
+				{
+					Name = file.FileName,
+					Type = file.ContentType,
+					UserId = request.UserId
+				};
+				using (MemoryStream ms = new MemoryStream())
+				{
+					// copy the file to memory stream 
+					await file.CopyToAsync(ms);
+
+					// set the byte array 
+					var fileBytes = ms.ToArray();
+					userFile.Content = Convert.ToBase64String(fileBytes);
+				}
+				userFiles.Add(userFile);
+			}
+			await accountDbContext.UserFiles.AddRangeAsync(userFiles);
 			await accountDbContext.SaveChangesAsync(cancellationToken);
-			return userFile.Id;
+			return userFiles.Select(x => x.Id).ToList();
 		}
 	}
 }
