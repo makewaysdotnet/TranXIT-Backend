@@ -42,8 +42,20 @@ public partial class CourierJobDbContext : DbContext
     public virtual DbSet<JobStatus> JobStatuses { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-        => optionsBuilder.UseSqlServer("Server=62.72.43.26;Database=Tranxit_CourierJob;User Id=sa;Password=Hamza@1234;TrustServerCertificate=True");
+    {
+        if (optionsBuilder.IsConfigured)
+        {
+            return;
+        }
+
+        var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__Database")
+            ?? Environment.GetEnvironmentVariable("TRANXIT_COURIERJOB_CONNECTION_STRING");
+
+        if (!string.IsNullOrWhiteSpace(connectionString))
+        {
+            optionsBuilder.UseSqlServer(connectionString);
+        }
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

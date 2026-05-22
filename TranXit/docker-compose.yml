@@ -1,5 +1,3 @@
-version: '3.9'
-
 networks:
   backend:
     driver: bridge
@@ -21,7 +19,7 @@ services:
       - AllowedOrigins__1=https://localhost:3000
       - SharedJwtSecrets__Key=${TRANXIT_JWT_SECRET:-TranXIT-local-development-secret-key-please-change}
     ports:
-      - "61260:8080"
+      - "${TRANXIT_GATEWAY_PORT:-8088}:8080"
     networks:
       - backend
     depends_on:
@@ -82,7 +80,7 @@ services:
       - ACCEPT_EULA=Y
       - MSSQL_SA_PASSWORD=${TRANXIT_SA_PASSWORD:-TranXit_dev_2026!}
     ports:
-      - "1433:1433"
+      - "${TRANXIT_SQL_PORT:-1433}:1433"
     volumes:
       - tranxit-sql-data:/var/opt/mssql
     networks:
@@ -91,8 +89,8 @@ services:
   rabbitmq:
     image: rabbitmq:3-management
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "${TRANXIT_RABBITMQ_PORT:-5672}:5672"
+      - "${TRANXIT_RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
     volumes:
       - tranxit-rabbitmq-data:/var/lib/rabbitmq
     networks:

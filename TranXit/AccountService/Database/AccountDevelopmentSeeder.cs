@@ -13,8 +13,7 @@ public static class AccountDevelopmentSeeder
 		using var scope = services.CreateScope();
 		var db = scope.ServiceProvider.GetRequiredService<AccountDbContext>();
 
-		await WaitForDatabaseAsync(db);
-		await db.Database.EnsureCreatedAsync();
+		await EnsureDatabaseCreatedAsync(db);
 
 		if (!await db.Roles.AnyAsync())
 		{
@@ -58,16 +57,14 @@ public static class AccountDevelopmentSeeder
 		await db.SaveChangesAsync();
 	}
 
-	private static async Task WaitForDatabaseAsync(AccountDbContext db)
+	private static async Task EnsureDatabaseCreatedAsync(AccountDbContext db)
 	{
 		for (var attempt = 1; attempt <= 30; attempt++)
 		{
 			try
 			{
-				if (await db.Database.CanConnectAsync())
-				{
-					return;
-				}
+				await db.Database.EnsureCreatedAsync();
+				return;
 			}
 			catch when (attempt < 30)
 			{
