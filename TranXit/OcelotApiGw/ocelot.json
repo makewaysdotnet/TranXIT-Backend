@@ -1,181 +1,34 @@
 {
   "Routes": [
-    // Login API
     {
-      "DownstreamPathTemplate": "/api/login",
+      "DownstreamPathTemplate": "/api/jobs",
       "DownstreamSchema": "http",
-      "DownstreamHttpMethod": "POST",
       "RouteIsCaseSensitive": false,
       "DownstreamHostAndPorts": [
         {
-          "Host": "accountservice",
+          "Host": "courierjobservice",
           "Port": 8080
         }
       ],
-      "UpstreamPathTemplate": "/api/login",
-      "UpstreamHttpMethod": [ "Post" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "UpstreamPathTemplate": "/api/jobs",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH" ]
     },
-    // Google Login API
     {
-      "DownstreamPathTemplate": "/api/login/google",
+      "DownstreamPathTemplate": "/api/jobs/{everything}",
       "DownstreamSchema": "http",
-      "DownstreamHttpMethod": "POST",
       "RouteIsCaseSensitive": false,
       "DownstreamHostAndPorts": [
         {
-          "Host": "accountservice",
+          "Host": "courierjobservice",
           "Port": 8080
         }
       ],
-      "UpstreamPathTemplate": "/api/login/google",
-      "UpstreamHttpMethod": [ "Post" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
+      "UpstreamPathTemplate": "/api/jobs/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH" ]
     },
-    // Register API
-    {
-      "DownstreamPathTemplate": "/api/register",
-      "DownstreamSchema": "http",
-      "DownstreamHttpMethod": "POST",
-      "RouteIsCaseSensitive": false,
-      "DownstreamHostAndPorts": [
-        {
-          "Host": "accountservice",
-          "Port": 8080
-        }
-      ],
-      "UpstreamPathTemplate": "/api/register",
-      "UpstreamHttpMethod": [ "Post" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
-    },
-
-    // Get All Roles API
-    {
-      "DownstreamPathTemplate": "/api/roles",
-      "DownstreamSchema": "http",
-      "DownstreamHttpMethod": "GET",
-      "RouteIsCaseSensitive": false,
-      "DownstreamHostAndPorts": [
-        {
-          "Host": "accountservice",
-          "Port": 8080
-        }
-      ],
-      "UpstreamPathTemplate": "/api/roles",
-      "UpstreamHttpMethod": [ "Get" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
-    },
-
-    // Get All Role by id API
-    {
-      "DownstreamPathTemplate": "/api/roles/{id}",
-      "DownstreamSchema": "http",
-      "DownstreamHttpMethod": "GET",
-      "RouteIsCaseSensitive": false,
-      "DownstreamHostAndPorts": [
-        {
-          "Host": "accountservice",
-          "Port": 8080
-        }
-      ],
-      "UpstreamPathTemplate": "/api/roles/{id}",
-      "UpstreamHttpMethod": [ "Get" ],
-      "FileCacheOptions": { "TtlSeconds": 60 },
-      "AuthenticationOptions": {
-        "AuthenticationProviderKey": "Bearer"
-      }
-    },
-
-    // Upload Document API
-    {
-      "DownstreamPathTemplate": "/api/upload/document",
-      "DownstreamSchema": "http",
-      "DownstreamHttpMethod": "POST",
-      "RouteIsCaseSensitive": false,
-      "DownstreamHostAndPorts": [
-        {
-          "Host": "accountservice",
-          "Port": 8080
-        }
-      ],
-      "UpstreamPathTemplate": "/api/upload/document",
-      "UpstreamHttpMethod": [ "Post" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
-    },
-
-    // Upload Image API
-    {
-      "DownstreamPathTemplate": "/api/upload/image",
-      "DownstreamSchema": "http",
-      "DownstreamHttpMethod": "POST",
-      "RouteIsCaseSensitive": false,
-      "DownstreamHostAndPorts": [
-        {
-          "Host": "accountservice",
-          "Port": 8080
-        }
-      ],
-      "UpstreamPathTemplate": "/api/upload/image",
-      "UpstreamHttpMethod": [ "Post" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
-    },
-
-    // Verify Code API
-    {
-      "DownstreamPathTemplate": "/api/verify-code",
-      "DownstreamSchema": "http",
-      "DownstreamHttpMethod": "POST",
-      "RouteIsCaseSensitive": false,
-      "DownstreamHostAndPorts": [
-        {
-          "Host": "accountservice",
-          "Port": 8080
-        }
-      ],
-      "UpstreamPathTemplate": "/api/verify-code",
-      "UpstreamHttpMethod": [ "Post" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
-    },
-
-    // Send Code API
-    {
-      "DownstreamPathTemplate": "/api/send-code",
-      "DownstreamSchema": "http",
-      "DownstreamHttpMethod": "POST",
-      "RouteIsCaseSensitive": false,
-      "DownstreamHostAndPorts": [
-        {
-          "Host": "accountservice",
-          "Port": 8080
-        }
-      ],
-      "UpstreamPathTemplate": "/api/send-code",
-      "UpstreamHttpMethod": [ "Post" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
-    },
-    // Reset Password API
-    {
-      "DownstreamPathTemplate": "/api/reset-password",
-      "DownstreamSchema": "http",
-      "DownstreamHttpMethod": "POST",
-      "RouteIsCaseSensitive": false,
-      "DownstreamHostAndPorts": [
-        {
-          "Host": "accountservice",
-          "Port": 8080
-        }
-      ],
-      "UpstreamPathTemplate": "/api/reset-password",
-      "UpstreamHttpMethod": [ "Post" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
-    },
-    // ********************************* Courier service ******************************
-
-    // Create Bid Endpoint
     {
       "DownstreamPathTemplate": "/api/bids",
       "DownstreamSchema": "http",
-      "DownstreamHttpMethod": "POST",
       "RouteIsCaseSensitive": false,
       "DownstreamHostAndPorts": [
         {
@@ -184,18 +37,11 @@
         }
       ],
       "UpstreamPathTemplate": "/api/bids",
-      "UpstreamHttpMethod": [ "POST" ],
-      "FileCacheOptions": { "TtlSeconds": 60 },
-      "AuthenticationOptions": {
-        "AuthenticationProviderKey": "Bearer"
-      }
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH" ]
     },
-
-    // Get Job User Bids Endpoint
     {
-      "DownstreamPathTemplate": "/api/bids/{jobId:int}",
+      "DownstreamPathTemplate": "/api/bids/{everything}",
       "DownstreamSchema": "http",
-      "DownstreamHttpMethod": "GET",
       "RouteIsCaseSensitive": false,
       "DownstreamHostAndPorts": [
         {
@@ -203,19 +49,12 @@
           "Port": 8080
         }
       ],
-      "UpstreamPathTemplate": "/api/bids/{jobId:int}",
-      "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 },
-      "AuthenticationOptions": {
-        "AuthenticationProviderKey": "Bearer"
-      }
+      "UpstreamPathTemplate": "/api/bids/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH" ]
     },
-
-    // Update Bid Job Status Endpoint
     {
-      "DownstreamPathTemplate": "/api/bids/status",
+      "DownstreamPathTemplate": "/api/cities/{everything}",
       "DownstreamSchema": "http",
-      "DownstreamHttpMethod": "PUT",
       "RouteIsCaseSensitive": false,
       "DownstreamHostAndPorts": [
         {
@@ -223,39 +62,12 @@
           "Port": 8080
         }
       ],
-      "UpstreamPathTemplate": "/api/bids/status",
-      "UpstreamHttpMethod": [ "PUT" ],
-      "FileCacheOptions": { "TtlSeconds": 60 },
-      "AuthenticationOptions": {
-        "AuthenticationProviderKey": "Bearer"
-      }
+      "UpstreamPathTemplate": "/api/cities/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH" ]
     },
-
-    // Get Cities Endpoint
-    {
-      "DownstreamPathTemplate": "/api/cities/{countryId:int}",
-      "DownstreamSchema": "http",
-      "DownstreamHttpMethod": "GET",
-      "RouteIsCaseSensitive": false,
-      "DownstreamHostAndPorts": [
-        {
-          "Host": "courierjobservice",
-          "Port": 8080
-        }
-      ],
-      "UpstreamPathTemplate": "/api/cities/{countryId:int}",
-      "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 },
-      "AuthenticationOptions": {
-        "AuthenticationProviderKey": "Bearer"
-      }
-    },
-
-    // Get Countries Endpoint
     {
       "DownstreamPathTemplate": "/api/countries",
       "DownstreamSchema": "http",
-      "DownstreamHttpMethod": "GET",
       "RouteIsCaseSensitive": false,
       "DownstreamHostAndPorts": [
         {
@@ -264,18 +76,11 @@
         }
       ],
       "UpstreamPathTemplate": "/api/countries",
-      "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 },
-      "AuthenticationOptions": {
-        "AuthenticationProviderKey": "Bearer"
-      }
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH" ]
     },
-
-    // Get Courier Modes Endpoint
     {
       "DownstreamPathTemplate": "/api/courier-modes",
       "DownstreamSchema": "http",
-      "DownstreamHttpMethod": "GET",
       "RouteIsCaseSensitive": false,
       "DownstreamHostAndPorts": [
         {
@@ -284,18 +89,11 @@
         }
       ],
       "UpstreamPathTemplate": "/api/courier-modes",
-      "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 },
-      "AuthenticationOptions": {
-        "AuthenticationProviderKey": "Bearer"
-      }
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH" ]
     },
-
-    // Get Delivery Types Endpoint
     {
       "DownstreamPathTemplate": "/api/delivery-types",
       "DownstreamSchema": "http",
-      "DownstreamHttpMethod": "GET",
       "RouteIsCaseSensitive": false,
       "DownstreamHostAndPorts": [
         {
@@ -304,18 +102,11 @@
         }
       ],
       "UpstreamPathTemplate": "/api/delivery-types",
-      "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 },
-      "AuthenticationOptions": {
-        "AuthenticationProviderKey": "Bearer"
-      }
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH" ]
     },
-
-    // Get Item Types Endpoint
     {
       "DownstreamPathTemplate": "/api/item-types",
       "DownstreamSchema": "http",
-      "DownstreamHttpMethod": "GET",
       "RouteIsCaseSensitive": false,
       "DownstreamHostAndPorts": [
         {
@@ -324,18 +115,11 @@
         }
       ],
       "UpstreamPathTemplate": "/api/item-types",
-      "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 },
-      "AuthenticationOptions": {
-        "AuthenticationProviderKey": "Bearer"
-      }
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH" ]
     },
-
-    // Get Shipment Types Endpoint
     {
       "DownstreamPathTemplate": "/api/shipment-types",
       "DownstreamSchema": "http",
-      "DownstreamHttpMethod": "GET",
       "RouteIsCaseSensitive": false,
       "DownstreamHostAndPorts": [
         {
@@ -344,18 +128,11 @@
         }
       ],
       "UpstreamPathTemplate": "/api/shipment-types",
-      "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 },
-      "AuthenticationOptions": {
-        "AuthenticationProviderKey": "Bearer"
-      }
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH" ]
     },
-
-    // GET Jobs Endpoint
     {
-      "DownstreamPathTemplate": "/api/jobs",
+      "DownstreamPathTemplate": "/courierjobservice/{everything}",
       "DownstreamSchema": "http",
-      "DownstreamHttpMethod": "GET",
       "RouteIsCaseSensitive": false,
       "DownstreamHostAndPorts": [
         {
@@ -363,152 +140,21 @@
           "Port": 8080
         }
       ],
-      "UpstreamPathTemplate": "/api/jobs",
-      "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 },
-      "AuthenticationOptions": {
-        "AuthenticationProviderKey": "Bearer"
-      }
+      "UpstreamPathTemplate": "/courierjobservice/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH" ]
     },
-
-    // Create Jobs Endpoint
     {
-      "DownstreamPathTemplate": "/api/jobs",
+      "DownstreamPathTemplate": "/api/{everything}",
       "DownstreamSchema": "http",
-      "DownstreamHttpMethod": "POST",
       "RouteIsCaseSensitive": false,
       "DownstreamHostAndPorts": [
         {
-          "Host": "courierjobservice",
+          "Host": "accountservice",
           "Port": 8080
         }
       ],
-      "UpstreamPathTemplate": "/api/jobs",
-      "UpstreamHttpMethod": [ "POST" ],
-      "FileCacheOptions": { "TtlSeconds": 60 },
-      "AuthenticationOptions": {
-        "AuthenticationProviderKey": "Bearer"
-      }
-    },
-
-    // Get Job by Customer Id Endpoint
-    {
-      "DownstreamPathTemplate": "/api/jobs/{customerId:int}",
-      "DownstreamSchema": "http",
-      "DownstreamHttpMethod": "GET",
-      "RouteIsCaseSensitive": false,
-      "DownstreamHostAndPorts": [
-        {
-          "Host": "courierjobservice",
-          "Port": 8080
-        }
-      ],
-      "UpstreamPathTemplate": "/api/jobs/{customerId:int}",
-      "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 },
-      "AuthenticationOptions": {
-        "AuthenticationProviderKey": "Bearer"
-      }
-    },
-
-    // Get Job Bid Stats Endpoint
-    {
-      "DownstreamPathTemplate": "/api/jobs/{jobId:int}/bid-stats",
-      "DownstreamSchema": "http",
-      "DownstreamHttpMethod": "GET",
-      "RouteIsCaseSensitive": false,
-      "DownstreamHostAndPorts": [
-        {
-          "Host": "courierjobservice",
-          "Port": 8080
-        }
-      ],
-      "UpstreamPathTemplate": "/api/jobs/{jobId:int}/bid-stats",
-      "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 },
-      "AuthenticationOptions": {
-        "AuthenticationProviderKey": "Bearer"
-      }
-    },
-
-    // Get Job Details Endpoint
-    {
-      "DownstreamPathTemplate": "/api/jobs/{jobId:int}/details",
-      "DownstreamSchema": "http",
-      "DownstreamHttpMethod": "GET",
-      "RouteIsCaseSensitive": false,
-      "DownstreamHostAndPorts": [
-        {
-          "Host": "courierjobservice",
-          "Port": 8080
-        }
-      ],
-      "UpstreamPathTemplate": "/api/jobs/{jobId:int}/details",
-      "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 },
-      "AuthenticationOptions": {
-        "AuthenticationProviderKey": "Bearer"
-      }
-    },
-
-    // Get Job Stats Endpoint
-    {
-      "DownstreamPathTemplate": "/api/jobs/stats",
-      "DownstreamSchema": "http",
-      "DownstreamHttpMethod": "GET",
-      "RouteIsCaseSensitive": false,
-      "DownstreamHostAndPorts": [
-        {
-          "Host": "courierjobservice",
-          "Port": 8080
-        }
-      ],
-      "UpstreamPathTemplate": "/api/jobs/stats",
-      "UpstreamHttpMethod": [ "GET" ],
-      "FileCacheOptions": { "TtlSeconds": 60 },
-      "AuthenticationOptions": {
-        "AuthenticationProviderKey": "Bearer"
-      }
-    },
-
-    // Get Job Stats Endpoint
-    {
-      "DownstreamPathTemplate": "/api/jobs/status",
-      "DownstreamSchema": "http",
-      "DownstreamHttpMethod": "PUT",
-      "RouteIsCaseSensitive": false,
-      "DownstreamHostAndPorts": [
-        {
-          "Host": "courierjobservice",
-          "Port": 8080
-        }
-      ],
-      "UpstreamPathTemplate": "/api/jobs/status",
-      "UpstreamHttpMethod": [ "PUT" ],
-      "FileCacheOptions": { "TtlSeconds": 60 },
-      "AuthenticationOptions": {
-        "AuthenticationProviderKey": "Bearer"
-      }
-    },
-
-    // Upload Job Item Image API
-    {
-      "DownstreamPathTemplate": "/api/jobs/job-item-image",
-      "DownstreamSchema": "http",
-      "DownstreamHttpMethod": "POST",
-      "RouteIsCaseSensitive": false,
-      "DownstreamHostAndPorts": [
-        {
-          "Host": "courierjobservice",
-          "Port": 8080
-        }
-      ],
-      "UpstreamPathTemplate": "/api/jobs/job-item-image",
-      "UpstreamHttpMethod": [ "Post" ],
-      "FileCacheOptions": { "TtlSeconds": 60 },
-      "AuthenticationOptions": {
-        "AuthenticationProviderKey": "Bearer"
-      }
+      "UpstreamPathTemplate": "/api/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH" ]
     }
   ],
   "GlobalConfiguration": {

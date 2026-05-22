@@ -13,6 +13,11 @@ public class MailService(IOptions<MailSettings> mailSettings) : IMailService
 	MailSettings _mailSettings = mailSettings.Value;
 	public async Task<bool> SendMail(MailRequest request, CancellationToken cancellationToken = default(CancellationToken))
 	{
+		if (_mailSettings.DisableSending || string.IsNullOrWhiteSpace(_mailSettings.Server))
+		{
+			return true;
+		}
+
 		using (MimeMessage emailMessage = new MimeMessage())
 		{
 			MailboxAddress emailFrom = new MailboxAddress(_mailSettings.SenderName, _mailSettings.SenderEmail);
