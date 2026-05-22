@@ -25,6 +25,7 @@ Version.cpp
 /TranXit/bin
 
 /TranXit/.env
+/TranXit/.containers/
 
 /TranXit/AccountService/obj
 /TranXit/AccountService/bin
