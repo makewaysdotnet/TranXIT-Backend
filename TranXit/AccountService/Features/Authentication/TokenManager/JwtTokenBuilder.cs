@@ -13,6 +13,21 @@ namespace AccountService.Features.Authentication.TokenManager
 	{
 		public string BuildToken(TokenBuilderRequest requestModel)
 		{
+			if (string.IsNullOrWhiteSpace(requestModel.SecretKey) || Encoding.UTF8.GetByteCount(requestModel.SecretKey) < 32)
+			{
+				throw new InvalidOperationException("JWT signing key must be configured and at least 32 bytes.");
+			}
+
+			if (string.IsNullOrWhiteSpace(requestModel.Issuer))
+			{
+				throw new InvalidOperationException("JWT issuer must be configured.");
+			}
+
+			if (string.IsNullOrWhiteSpace(requestModel.Audience))
+			{
+				throw new InvalidOperationException("JWT audience must be configured.");
+			}
+
 			var claims = new ClaimsIdentity(new List<Claim>
 			{
 				new Claim(JwtRegisteredClaimNames.Email, requestModel.Email),
@@ -27,6 +42,8 @@ namespace AccountService.Features.Authentication.TokenManager
 			var tokenDescriptor = new SecurityTokenDescriptor
 			{
 				Subject = claims,
+				Issuer = requestModel.Issuer,
+				Audience = requestModel.Audience,
 				Expires = DateTime.UtcNow.AddMinutes(requestModel.ExpiryMinutes),
 				SigningCredentials = credentials
 			};
