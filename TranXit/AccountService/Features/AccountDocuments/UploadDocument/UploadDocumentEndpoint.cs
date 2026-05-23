@@ -4,6 +4,7 @@ using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using SharedServicesManager;
+using SharedServicesManager.Helpers;
 using System.Net;
 
 namespace AccountService.Features.AccountDocuments.UploadDocument;
@@ -15,10 +16,16 @@ public class UploadDocumentEndpoint : CarterModule
 	{ }
 	public override void AddRoutes(IEndpointRouteBuilder app)
 	{
-		app.MapPost("/upload/document", async (HttpRequest request, ISender sender) =>
+		app.MapPost("/upload/document", async (HttpRequest request, ISender sender, IHttpContextAccessor httpContextAccessor) =>
 		{
 			var form = await request.ReadFormAsync();
-			var userId = Convert.ToInt32(form["UserId"]);
+			var userId = HttpContextUser.GetCurrentUserId(httpContextAccessor);
+			var formUserId = form["UserId"].FirstOrDefault();
+			if (int.TryParse(formUserId, out var requestedUserId) && requestedUserId != userId)
+			{
+				return Results.Forbid();
+			}
+
 			var files = form.Files.GetFiles("Files");
 			if (files is null || files.Count == 0)
 			{
@@ -36,6 +43,7 @@ public class UploadDocumentEndpoint : CarterModule
 			}
 			return Results.Ok(result);
 		})
+		.RequireAuthorization()
 		.WithTags("Auth")
 		.WithOpenApi(operation =>
 		{
@@ -52,11 +60,6 @@ public class UploadDocumentEndpoint : CarterModule
 									Type = "object",
 									Properties =
 									{
-										["UserId"] = new Microsoft.OpenApi.Models.OpenApiSchema
-										{
-											Type = "string",
-											Description = "User ID"
-										},
 										["Files"] = new Microsoft.OpenApi.Models.OpenApiSchema
 										{
 											Type = "array",
@@ -69,7 +72,7 @@ public class UploadDocumentEndpoint : CarterModule
 											Description = "The files to upload"
 										}
 									},
-									Required = new HashSet<string> { "UserId", "Files" }
+									Required = new HashSet<string> { "Files" }
 								}
 						}
 				}
@@ -82,6 +85,9 @@ public class UploadDocumentEndpoint : CarterModule
 }
 public class UploadDocument
 {
+	private const int MaxFileCount = 5;
+	private const long MaxFileBytes = 10 * 1024 * 1024;
+
 	public class Command : IRequest<Result<List<int>>>
 	{
 		public required int UserId { get; set; }
@@ -93,7 +99,10 @@ public class UploadDocument
 		public Validator()
 		{
 			RuleFor(c => c.Files)
-				.Must(x => x.Count > 0).WithMessage("Invalid File");
+				.Must(x => x.Count > 0).WithMessage("Invalid File")
+				.Must(x => x.Count <= MaxFileCount).WithMessage("A maximum of 5 files can be uploaded")
+				.Must(x => x.All(file => file.Length > 0 && file.Length <= MaxFileBytes))
+				.WithMessage("Each file must be 10MB or less");
 		}
 	}
 	internal sealed class Handler(AccountDbContext accountDbContext,
@@ -108,18 +117,18 @@ public class UploadDocument
 				return new Error(validationResult.ToString());
 			}
 
-			var user = await accountDbContext.Users.FindAsync(request.UserId);
+			var user = await accountDbContext.Users.FindAsync([request.UserId], cancellationToken);
 			if (user is null)
 			{
 				return new Error("Invalid User");
 			}
 			var userFiles = await accountDbContext.UserFiles
 				.Where(x=> x.UserId == request.UserId)
-				.ToListAsync();
+				.ToListAsync(cancellationToken);
 			if (userFiles.Any())
 			{
 				accountDbContext.UserFiles.RemoveRange(userFiles);
-				await accountDbContext.SaveChangesAsync();
+				await accountDbContext.SaveChangesAsync(cancellationToken);
 			}
 			userFiles = new List<UserFile>();
 			foreach (var file in request.Files)
@@ -133,7 +142,7 @@ public class UploadDocument
 				using (MemoryStream ms = new MemoryStream())
 				{
 					// copy the file to memory stream 
-					await file.CopyToAsync(ms);
+					await file.CopyToAsync(ms, cancellationToken);
 
 					// set the byte array 
 					var fileBytes = ms.ToArray();

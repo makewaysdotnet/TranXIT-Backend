@@ -4,6 +4,7 @@ using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using SharedServicesManager;
+using SharedServicesManager.Helpers;
 using System.Net;
 
 namespace AccountService.Features.AccountDocuments.UploadImage;
@@ -15,10 +16,16 @@ public class UploadImageEndpoint : CarterModule
 	{ }
 	public override void AddRoutes(IEndpointRouteBuilder app)
 	{
-		app.MapPost("/upload/image", async (HttpRequest request, ISender sender) =>
+		app.MapPost("/upload/image", async (HttpRequest request, ISender sender, IHttpContextAccessor httpContextAccessor) =>
 		{
 			var form = await request.ReadFormAsync();
-			var userId = Convert.ToInt32(form["UserId"]);
+			var userId = HttpContextUser.GetCurrentUserId(httpContextAccessor);
+			var formUserId = form["UserId"].FirstOrDefault();
+			if (int.TryParse(formUserId, out var requestedUserId) && requestedUserId != userId)
+			{
+				return Results.Forbid();
+			}
+
 			var file = form.Files.GetFile("File");
 			if (file is null || file.Length == 0)
 			{
@@ -35,11 +42,13 @@ public class UploadImageEndpoint : CarterModule
 				return Results.BadRequest(result);
 			}
 			return Results.Ok(result);
-		}).WithTags("Auth")
+		})
+		.RequireAuthorization()
+		.WithTags("Auth")
 		.WithOpenApi(operation =>
 		{
-			operation.OperationId = "UploadDocument";
-			operation.Summary = "Uploads a document.";
+			operation.OperationId = "UploadImage";
+			operation.Summary = "Uploads the authenticated user's image.";
 			operation.RequestBody = new Microsoft.OpenApi.Models.OpenApiRequestBody
 			{
 				Content =
@@ -51,11 +60,6 @@ public class UploadImageEndpoint : CarterModule
 									Type = "object",
 									Properties =
 									{
-										["UserId"] = new Microsoft.OpenApi.Models.OpenApiSchema
-										{
-											Type = "string",
-											Description = "User ID"
-										},
 										["File"] = new Microsoft.OpenApi.Models.OpenApiSchema
 										{
 											Type = "string",
@@ -63,7 +67,7 @@ public class UploadImageEndpoint : CarterModule
 											Description = "The image to upload"
 										}
 									},
-									Required = new HashSet<string> { "UserId", "File" }
+									Required = new HashSet<string> { "File" }
 								}
 						}
 				}
@@ -77,6 +81,14 @@ public class UploadImageEndpoint : CarterModule
 }
 public class UploadImage
 {
+	private const long MaxImageBytes = 5 * 1024 * 1024;
+	private static readonly string[] AllowedImageContentTypes =
+	[
+		"image/jpeg",
+		"image/png",
+		"image/webp"
+	];
+
 	public class Command : IRequest<Result<int>>
 	{
 		public required int UserId { get; set; }
@@ -88,7 +100,10 @@ public class UploadImage
 		public Validator()
 		{
 			RuleFor(c => c.File)
-				.Must(x => x.Length > 0).WithMessage("Invalid File");
+				.Must(x => x.Length > 0).WithMessage("Invalid File")
+				.Must(x => x.Length <= MaxImageBytes).WithMessage("Image size must be 5MB or less")
+				.Must(x => AllowedImageContentTypes.Contains(x.ContentType, StringComparer.OrdinalIgnoreCase))
+				.WithMessage("Only JPEG, PNG, and WebP images are allowed");
 		}
 	}
 	internal sealed class Handler(AccountDbContext accountDbContext,
@@ -103,13 +118,13 @@ public class UploadImage
 				return new Error(validationResult.ToString());
 			}
 
-			var user = await accountDbContext.Users.FindAsync(request.UserId);
+			var user = await accountDbContext.Users.FindAsync([request.UserId], cancellationToken);
 			if (user is null)
 			{
 				return new Error("Invalid User");
 			}
 			var userImage = await accountDbContext.UserImages
-				.SingleOrDefaultAsync(x => x.UserId == request.UserId);
+				.SingleOrDefaultAsync(x => x.UserId == request.UserId, cancellationToken);
 			var isUpdate = false;
 			if (userImage is not null)
 			{
@@ -131,7 +146,7 @@ public class UploadImage
 			using (MemoryStream ms = new MemoryStream())
 			{
 				// copy the file to memory stream 
-				await request.File.CopyToAsync(ms);
+				await request.File.CopyToAsync(ms, cancellationToken);
 
 				// set the byte array 
 				var fileBytes = ms.ToArray();
