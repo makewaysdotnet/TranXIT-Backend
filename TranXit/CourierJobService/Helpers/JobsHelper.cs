@@ -61,8 +61,8 @@ namespace CourierJobService.Helpers
 					biddings.FirstOrDefault(b => b.JobStatusId != (int)JobStatusEnum.Lost) != null &&
 					biddings.FirstOrDefault(b => b.JobStatusId != (int)JobStatusEnum.Lost)!.JobStatus != null)
 			{
-				return (biddings.FirstOrDefault(b => b.JobStatusId == (int)JobStatusEnum.Lost)!.JobStatus!.Id!,
-					biddings.FirstOrDefault(b => b.JobStatusId == (int)JobStatusEnum.Lost)!.JobStatus!.Status!);
+				var activeBidStatus = biddings.First(b => b.JobStatusId != (int)JobStatusEnum.Lost).JobStatus!;
+				return (activeBidStatus.Id!, activeBidStatus.Status!);
 			}
 			else
 			{

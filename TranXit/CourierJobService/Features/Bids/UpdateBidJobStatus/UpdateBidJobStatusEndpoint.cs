@@ -105,9 +105,13 @@ public class UpdateBidJobStatus
 				}
 
 				var selectedBidProposal = bid.BiddingProposals.SingleOrDefault(x => x.Id == request.BidProposalId);
-				if (selectedBidProposal?.Total is null)
+				if (selectedBidProposal is null)
 				{
 					return new Error("Bid proposal not found");
+				}
+				if (selectedBidProposal.Total is null)
+				{
+					return new Error("Bid proposal total not found");
 				}
 
 				// update job status and bit
