@@ -7,6 +7,7 @@
 		public string ConfirmPassword { get; set; } = string.Empty;
 		public string Username { get; set; } = string.Empty;
 		public string Phone { get; set; } = string.Empty;
+		public string? Role { get; set; }
 		public int? RoleId { get; set; }
 	}
 }
