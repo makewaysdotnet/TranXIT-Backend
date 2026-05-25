@@ -1,4 +1,5 @@
 ﻿using AccountService.Database;
+using AccountService.Features.Authentication;
 using AccountService.Features.Authentication.CommonResults;
 using Carter;
 using FluentValidation;
@@ -45,6 +46,7 @@ public class AccountRegister
 		public string ConfirmPassword { get; set; } = string.Empty;
 		public string Username { get; set; } = string.Empty;
 		public string Phone { get; set; } = string.Empty;
+		public string? Role { get; set; }
 		public int? RoleId { get; set; }
 	}
 
@@ -112,6 +114,15 @@ public class AccountRegister
 			}
 
 			var passwordHash = BC.EnhancedHashPassword(request.Password);
+			var roleResult = await PublicRegistrationRoles.ResolveAsync(
+				accountDbContext,
+				request.Role,
+				request.RoleId,
+				cancellationToken);
+			if (roleResult.Error is not null || roleResult.Role is null)
+			{
+				return new Error(roleResult.Error ?? "Role is invalid");
+			}
 
 			var verificationCode = utils.Generate6DRandomCode();
 
@@ -119,7 +130,7 @@ public class AccountRegister
 			{
 				Email = request.Email,
 				PasswordHash = passwordHash,
-				RoleId = request.RoleId,
+				RoleId = roleResult.Role.Id,
 				Username = request.Username,
 				Phone = request.Phone,
 				CodeSentAtUtc = DateTime.UtcNow,
@@ -146,8 +157,8 @@ public class AccountRegister
 				Id = user.Id,
 				Email = user.Email,
 				Name = user.Username,
-				RoleId = user.RoleId,
-				Role = user.Role is not null ? user.Role.Name! : null,
+				RoleId = roleResult.Role.Id,
+				Role = roleResult.Role.Name,
 				IsEmailVerified = Convert.ToBoolean(user.IsEmailVerified),
 				DevelopmentVerificationCode = environment.IsDevelopment() &&
 					mailSettings.Value.DisableSending ?
