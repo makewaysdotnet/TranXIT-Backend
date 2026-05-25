@@ -5,6 +5,7 @@ using FluentValidation;
 using Mapster;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using SharedServicesManager;
 using SharedServicesManager.EmailService;
 using SharedServicesManager.Helpers;
@@ -78,7 +79,9 @@ public class AccountRegister
 	internal sealed class Handler(AccountDbContext accountDbContext,
 		IValidator<Command> validator,
 		IUtils utils,
-		IMailService mailService)
+		IMailService mailService,
+		IOptions<MailSettings> mailSettings,
+		IHostEnvironment environment)
 		: IRequestHandler<Command, Result<LoginResult>>
 	{
 		public async Task<Result<LoginResult>> Handle(Command request, CancellationToken cancellationToken)
@@ -110,37 +113,33 @@ public class AccountRegister
 
 			var passwordHash = BC.EnhancedHashPassword(request.Password);
 
+			var verificationCode = utils.Generate6DRandomCode();
+
 			user = new User
 			{
 				Email = request.Email,
 				PasswordHash = passwordHash,
 				RoleId = request.RoleId,
 				Username = request.Username,
-				Phone = request.Phone
+				Phone = request.Phone,
+				CodeSentAtUtc = DateTime.UtcNow,
+				VerificationCode = verificationCode
 			};
 
 			await accountDbContext.AddAsync(user);
 			await accountDbContext.SaveChangesAsync(cancellationToken);
 
-			//Send Email Verification Code
-			//var code = utils.Generate6DRandomCode();
-			//var mailRequest = new MailRequest
-			//{
-			//	EmailTo = [request.Email],
-			//	EmailSubject = "Email Verification",
-			//	EmailBody = $"{code}"
-			//};
-			//var isMailSent = await mailService.SendMail(mailRequest);
-			//if (!isMailSent)
-			//{
-			//	return new Error("User Registered Successfully But Email Sent Failed, Retry Verification");
-			//}
-			//user.CodeSentAtUtc = DateTime.UtcNow;
-			//user.VerificationCode = code;
-
-			//accountDbContext.Users.Update(user);
-			//await accountDbContext.SaveChangesAsync(cancellationToken);
-
+			var mailRequest = new MailRequest
+			{
+				EmailTo = [request.Email],
+				EmailSubject = "Email Verification",
+				EmailBody = $"{verificationCode:D6}"
+			};
+			var isMailSent = await mailService.SendMail(mailRequest, cancellationToken);
+			if (!isMailSent)
+			{
+				return new Error("User Registered Successfully But Email Sent Failed, Retry Verification");
+			}
 
 			return new LoginResult
 			{
@@ -149,7 +148,11 @@ public class AccountRegister
 				Name = user.Username,
 				RoleId = user.RoleId,
 				Role = user.Role is not null ? user.Role.Name! : null,
-				IsEmailVerified = Convert.ToBoolean(user.IsEmailVerified)
+				IsEmailVerified = Convert.ToBoolean(user.IsEmailVerified),
+				DevelopmentVerificationCode = environment.IsDevelopment() &&
+					mailSettings.Value.DisableSending ?
+					$"{verificationCode:D6}" :
+					null
 			};
 		}
 	}
