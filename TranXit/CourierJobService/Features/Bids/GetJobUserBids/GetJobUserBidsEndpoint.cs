@@ -63,6 +63,11 @@ public class GetJobUserBids
 				.Select(x => new JobUserBidResult
 				{
 					BidId = x.Id,
+					BidProposalId = x.BiddingProposals
+						.OrderByDescending(proposal => proposal.IsBaseBid == true)
+						.ThenBy(proposal => proposal.Total)
+						.Select(proposal => (int?)proposal.Id)
+						.FirstOrDefault(),
 					BidMinOffer = x.TotalAmount,
 					CourierId = x.UserId,
 				})
@@ -73,8 +78,22 @@ public class GetJobUserBids
 			}
 			var paginatedResponse = await Pagination<JobUserBidResult>
 				.CreateAsync(bidsQuery, request.Page, request.PageSize);
+			var bidIds = paginatedResponse.Items.Select(item => item.BidId).ToList();
+			var bidProposalLookup = await jobDbContext.BiddingProposals
+				.AsNoTracking()
+				.Where(proposal => proposal.BiddingId.HasValue && bidIds.Contains(proposal.BiddingId.Value))
+				.Select(proposal => new { proposal.BiddingId, proposal.Id })
+				.ToListAsync(cancellationToken);
+
 			foreach (var item in paginatedResponse.Items)
 			{
+				item.BidProposalIds = bidProposalLookup
+					.Where(proposal => proposal.BiddingId == item.BidId)
+					.Select(proposal => proposal.Id)
+					.ToList();
+				item.BidProposalId ??= item.BidProposalIds
+					.Select(proposalId => (int?)proposalId)
+					.FirstOrDefault();
 				var user = await UserRequest.GetUserAsync(item!.CourierId, messageBus);
 				item.CourierName = user?.UserName!;
 			}
