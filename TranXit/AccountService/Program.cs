@@ -1,4 +1,5 @@
 using AccountService.Database;
+using AccountService.Features.Authentication.Refresh;
 using AccountService.Features.Authentication.TokenManager;
 using Carter;
 using FluentValidation;
@@ -47,6 +48,7 @@ var assembly = typeof(Program).Assembly;
 builder.Services.AddMediatR(config =>
 	config.RegisterServicesFromAssembly(assembly));
 builder.Services.AddScoped<IJwtTokenBuilder, JwtTokenBuilder>();
+builder.Services.AddScoped<IRefreshTokenService, RefreshTokenService>();
 builder.Services.AddScoped<IMailService, MailService>();
 builder.Services.AddScoped<IUtils, Utils>();
 
@@ -81,21 +83,36 @@ builder.Services.AddMassTransit(busConfigurator =>
 	busConfigurator.AddSagaStateMachines(assembly);
 	busConfigurator.AddSagas(assembly);
 	busConfigurator.AddActivities(assembly);
-	busConfigurator.UsingRabbitMq((context, configurator) =>
+	if (builder.Environment.IsEnvironment("Testing"))
 	{
-		configurator.Host(builder.Configuration["RabbitMQ:HostName"]!, "/", c =>
+		busConfigurator.UsingInMemory((context, configurator) =>
 		{
-			c.Username(builder.Configuration["RabbitMQ:UserName"]!);
-			c.Password(builder.Configuration["RabbitMQ:Password"]!);
+			configurator.ConfigureEndpoints(context);
 		});
-		configurator.ConfigureEndpoints(context);
-	});
+	}
+	else
+	{
+		busConfigurator.UsingRabbitMq((context, configurator) =>
+		{
+			configurator.Host(builder.Configuration["RabbitMQ:HostName"]!, "/", c =>
+			{
+				c.Username(builder.Configuration["RabbitMQ:UserName"]!);
+				c.Password(builder.Configuration["RabbitMQ:Password"]!);
+			});
+			configurator.ConfigureEndpoints(context);
+		});
+	}
 });
 builder.Services.AddCors();
 
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
+if (!app.Environment.IsEnvironment("Testing"))
+{
+	await AccountDatabaseMigrator.MigrateAsync(app.Services);
+}
+
 if (app.Environment.IsDevelopment())
 {
 	await AccountDevelopmentSeeder.SeedAsync(app.Services);

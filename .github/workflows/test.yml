@@ -1,0 +1,59 @@
+name: Backend Tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - feature/web-first-mvp
+      - main
+
+jobs:
+  dotnet:
+    name: dotnet build and test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: TranXit
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Verify Docker
+        run: docker info
+
+      - name: Restore
+        run: dotnet restore TranXit.sln
+
+      - name: Build
+        run: dotnet build TranXit.sln --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test TranXit.sln --no-build --configuration Release --logger "trx;LogFileName=test-results.trx"
+
+      - name: Install EF tooling
+        run: dotnet tool install --global dotnet-ef --version 8.0.4
+
+      - name: Generate migration scripts
+        env:
+          ASPNETCORE_ENVIRONMENT: Testing
+          ConnectionStrings__Database: Server=localhost;Database=TranXit_DesignTime;Trusted_Connection=True;TrustServerCertificate=True
+          SharedJwtSecrets__Key: ci-design-time-jwt-key-not-for-runtime-2026
+          Jwt__Issuer: TranXIT.AccountService
+          Jwt__Audience: TranXIT.ApiClients
+          Jwt__ExpiryMinutes: 60
+          Jwt__RequireHttpsMetadata: false
+        run: |
+          mkdir -p migration-scripts
+          dotnet ef migrations script --project AccountService --startup-project AccountService --context AccountDbContext --idempotent --output migration-scripts/accountservice.sql
+          dotnet ef migrations script --project CourierJobService --startup-project CourierJobService --context CourierJobDbContext --idempotent --output migration-scripts/courierjobservice.sql
+
+      - name: Upload migration scripts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ef-migration-scripts
+          path: TranXit/migration-scripts/*.sql

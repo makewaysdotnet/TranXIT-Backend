@@ -4,6 +4,7 @@ using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using SharedServicesManager;
+using SharedServicesManager.Helpers;
 using System.Net;
 
 namespace CourierJobService.Features.Jobs.UploadJobItemImage;
@@ -15,10 +16,15 @@ public class UploadJobItemImageEndpoint : CarterModule
 	{ }
 	public override void AddRoutes(IEndpointRouteBuilder app)
 	{
-		app.MapPost("/jobs/job-item-image", async (HttpRequest request, ISender sender) =>
+		app.MapPost("/jobs/job-item-image", async (HttpRequest request, ISender sender, IHttpContextAccessor httpContext) =>
 		{
 			var form = await request.ReadFormAsync();
-			var jobItemId = Convert.ToInt32(form["JobItemId"]);
+			var formJobItemId = form["JobItemId"].FirstOrDefault();
+			if (!int.TryParse(formJobItemId, out var jobItemId))
+			{
+				return Results.BadRequest("Invalid JobItemId.");
+			}
+
 			var file = form.Files.GetFile("File");
 			if (file is null || file.Length == 0)
 			{
@@ -27,11 +33,16 @@ public class UploadJobItemImageEndpoint : CarterModule
 			var command = new UploadJobItemImage.Command
 			{
 				JobItemId = jobItemId,
+				CurrentUserId = HttpContextUser.GetCurrentUserId(httpContext),
 				File = file
 			};
 			var result = await sender.Send(command);
 			if (!result.isSuccess)
 			{
+				if (result.error.Contains(UploadJobItemImage.ForbiddenError))
+				{
+					return Results.Forbid();
+				}
 				return Results.BadRequest(result);
 			}
 			return Results.Ok(result);
@@ -72,15 +83,27 @@ public class UploadJobItemImageEndpoint : CarterModule
 			return operation;
 		})
 		.Produces<Result<ImageResult>>((int)HttpStatusCode.OK)
-		.Produces<Result<ImageResult>>((int)HttpStatusCode.BadRequest);
+		.Produces<Result<ImageResult>>((int)HttpStatusCode.BadRequest)
+		.Produces((int)HttpStatusCode.Forbidden);
 	}
 
 }
 public class UploadJobItemImage
 {
+	public const string ForbiddenError = "Forbidden";
+
+	private const long MaxImageBytes = 5 * 1024 * 1024;
+	private static readonly string[] AllowedImageContentTypes =
+	[
+		"image/jpeg",
+		"image/png",
+		"image/webp"
+	];
+
 	public class Command : IRequest<Result<ImageResult>>
 	{
 		public required int JobItemId { get; set; }
+		public required int CurrentUserId { get; set; }
 		public required IFormFile File { get; set; }
 	}
 
@@ -89,7 +112,10 @@ public class UploadJobItemImage
 		public Validator()
 		{
 			RuleFor(c => c.File)
-				.Must(x => x.Length > 0).WithMessage("Invalid File");
+				.Must(x => x.Length > 0).WithMessage("Invalid File")
+				.Must(x => x.Length <= MaxImageBytes).WithMessage("Image size must be 5MB or less")
+				.Must(x => AllowedImageContentTypes.Contains(x.ContentType, StringComparer.OrdinalIgnoreCase))
+				.WithMessage("Only JPEG, PNG, and WebP images are allowed");
 		}
 	}
 	internal sealed class Handler(CourierJobDbContext courierJobDbContext,
@@ -104,13 +130,19 @@ public class UploadJobItemImage
 				return new Error(validationResult.ToString());
 			}
 
-			var jobItem = await courierJobDbContext.JobItems.FindAsync(request.JobItemId);
-			if (jobItem is null)
+			var jobItem = await courierJobDbContext.JobItems
+				.Include(x => x.Job)
+				.FirstOrDefaultAsync(x => x.Id == request.JobItemId, cancellationToken);
+			if (jobItem?.Job is null)
 			{
 				return new Error("Invalid Item");
 			}
+			if (jobItem.Job.UserId != request.CurrentUserId)
+			{
+				return new Error(ForbiddenError);
+			}
 			var jobItemImage = await courierJobDbContext.JobItemImages
-				.SingleOrDefaultAsync(x => x.JobItemId == request.JobItemId);
+				.SingleOrDefaultAsync(x => x.JobItemId == request.JobItemId, cancellationToken);
 			var isUpdate = false;
 			if (jobItemImage is not null)
 			{
@@ -131,7 +163,7 @@ public class UploadJobItemImage
 			using (MemoryStream ms = new MemoryStream())
 			{
 				// copy the file to memory stream 
-				await request.File.CopyToAsync(ms);
+				await request.File.CopyToAsync(ms, cancellationToken);
 
 				// set the byte array 
 				var fileBytes = ms.ToArray();
@@ -149,7 +181,7 @@ public class UploadJobItemImage
 					Content = jobItemImage.Content
 				};
 			}
-			await courierJobDbContext.JobItemImages.AddAsync(jobItemImage);
+			await courierJobDbContext.JobItemImages.AddAsync(jobItemImage, cancellationToken);
 			await courierJobDbContext.SaveChangesAsync(cancellationToken);
 			return new ImageResult
 			{

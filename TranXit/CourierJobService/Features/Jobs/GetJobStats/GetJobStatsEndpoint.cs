@@ -43,7 +43,9 @@ public class GetJobStats
 			var userId = HttpContextUser.GetCurrentUserId(httpContext);
 			var jobStatuses = JobsHelper.GetSuccessfullJobStatuses();
 			var biddings = await jobDbContext.Biddings
-				.Where(x => x.UserId == userId && jobStatuses.Contains(Convert.ToInt32(x.JobStatusId)))
+				.Where(x => x.UserId == userId &&
+					x.JobStatusId.HasValue &&
+					jobStatuses.Contains(x.JobStatusId.Value))
 				.AsSplitQuery()
 				.AsNoTracking()
 				.ToListAsync(cancellationToken);

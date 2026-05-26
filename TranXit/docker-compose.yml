@@ -17,7 +17,10 @@ services:
       - ASPNETCORE_HTTP_PORTS=8080
       - AllowedOrigins__0=http://localhost:3000
       - AllowedOrigins__1=https://localhost:3000
-      - SharedJwtSecrets__Key=${TRANXIT_JWT_SECRET:-TranXIT-local-development-secret-key-please-change}
+      - Jwt__Issuer=TranXIT.AccountService
+      - Jwt__Audience=TranXIT.ApiClients
+      - Jwt__RequireHttpsMetadata=false
+      - SharedJwtSecrets__Key=${TRANXIT_JWT_SECRET:?Set TRANXIT_JWT_SECRET in .env}
     ports:
       - "${TRANXIT_GATEWAY_PORT:-8088}:8080"
     networks:
@@ -36,11 +39,14 @@ services:
       - ASPNETCORE_HTTP_PORTS=8080
       - AllowedOrigins__0=http://localhost:3000
       - AllowedOrigins__1=https://localhost:3000
-      - ConnectionStrings__Database=Server=sqlserver,1433;Database=Tranxit_Account;User Id=sa;Password=${TRANXIT_SA_PASSWORD:-TranXit_dev_2026!};TrustServerCertificate=True;Encrypt=False
+      - ConnectionStrings__Database=Server=sqlserver,1433;Database=Tranxit_Account;User Id=sa;Password=${TRANXIT_SA_PASSWORD:?Set TRANXIT_SA_PASSWORD in .env};TrustServerCertificate=True;Encrypt=False
       - RabbitMQ__HostName=rabbitmq
-      - RabbitMQ__UserName=guest
-      - RabbitMQ__Password=guest
-      - SharedJwtSecrets__Key=${TRANXIT_JWT_SECRET:-TranXIT-local-development-secret-key-please-change}
+      - RabbitMQ__UserName=${TRANXIT_RABBITMQ_USERNAME:?Set TRANXIT_RABBITMQ_USERNAME in .env}
+      - RabbitMQ__Password=${TRANXIT_RABBITMQ_PASSWORD:?Set TRANXIT_RABBITMQ_PASSWORD in .env}
+      - Jwt__Issuer=TranXIT.AccountService
+      - Jwt__Audience=TranXIT.ApiClients
+      - Jwt__RequireHttpsMetadata=false
+      - SharedJwtSecrets__Key=${TRANXIT_JWT_SECRET:?Set TRANXIT_JWT_SECRET in .env}
       - MailSettings__DisableSending=true
     networks:
       - backend
@@ -60,11 +66,14 @@ services:
       - ASPNETCORE_HTTP_PORTS=8080
       - AllowedOrigins__0=http://localhost:3000
       - AllowedOrigins__1=https://localhost:3000
-      - ConnectionStrings__Database=Server=sqlserver,1433;Database=Tranxit_CourierJob;User Id=sa;Password=${TRANXIT_SA_PASSWORD:-TranXit_dev_2026!};TrustServerCertificate=True;Encrypt=False
+      - ConnectionStrings__Database=Server=sqlserver,1433;Database=Tranxit_CourierJob;User Id=sa;Password=${TRANXIT_SA_PASSWORD:?Set TRANXIT_SA_PASSWORD in .env};TrustServerCertificate=True;Encrypt=False
       - RabbitMQ__HostName=rabbitmq
-      - RabbitMQ__UserName=guest
-      - RabbitMQ__Password=guest
-      - SharedJwtSecrets__Key=${TRANXIT_JWT_SECRET:-TranXIT-local-development-secret-key-please-change}
+      - RabbitMQ__UserName=${TRANXIT_RABBITMQ_USERNAME:?Set TRANXIT_RABBITMQ_USERNAME in .env}
+      - RabbitMQ__Password=${TRANXIT_RABBITMQ_PASSWORD:?Set TRANXIT_RABBITMQ_PASSWORD in .env}
+      - Jwt__Issuer=TranXIT.AccountService
+      - Jwt__Audience=TranXIT.ApiClients
+      - Jwt__RequireHttpsMetadata=false
+      - SharedJwtSecrets__Key=${TRANXIT_JWT_SECRET:?Set TRANXIT_JWT_SECRET in .env}
       - MailSettings__DisableSending=true
     networks:
       - backend
@@ -78,7 +87,7 @@ services:
     image: mcr.microsoft.com/mssql/server:2022-latest
     environment:
       - ACCEPT_EULA=Y
-      - MSSQL_SA_PASSWORD=${TRANXIT_SA_PASSWORD:-TranXit_dev_2026!}
+      - MSSQL_SA_PASSWORD=${TRANXIT_SA_PASSWORD:?Set TRANXIT_SA_PASSWORD in .env}
     ports:
       - "${TRANXIT_SQL_PORT:-1433}:1433"
     volumes:
@@ -88,6 +97,9 @@ services:
 
   rabbitmq:
     image: rabbitmq:3-management
+    environment:
+      - RABBITMQ_DEFAULT_USER=${TRANXIT_RABBITMQ_USERNAME:?Set TRANXIT_RABBITMQ_USERNAME in .env}
+      - RABBITMQ_DEFAULT_PASS=${TRANXIT_RABBITMQ_PASSWORD:?Set TRANXIT_RABBITMQ_PASSWORD in .env}
     ports:
       - "${TRANXIT_RABBITMQ_PORT:-5672}:5672"
       - "${TRANXIT_RABBITMQ_MANAGEMENT_PORT:-15672}:15672"

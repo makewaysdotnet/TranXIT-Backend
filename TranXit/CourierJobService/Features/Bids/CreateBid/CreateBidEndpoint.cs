@@ -47,11 +47,14 @@ public class CreateBid
 		{
 			get
 			{
+				var proposals = BidProposals ?? Enumerable.Empty<BidProposalCommand>();
+				var baseBidTotal = proposals.FirstOrDefault(x => x.IsBaseBid == true)?.Total;
+
 				return PickupCharges +
 					HandlingCharges +
 					CustomClearanceCharges +
-					BidCustomCharges?.Sum(x => x.Amount) +
-					BidProposals.Single(x => x.IsBaseBid == true)?.Total;
+					(BidCustomCharges?.Sum(x => x.Amount) ?? 0) +
+					(baseBidTotal ?? 0);
 			}
 		}
 		public bool? IsInsurancePolicy { get; set; }
@@ -93,7 +96,16 @@ public class CreateBid
 			RuleFor(c => c.BidProposals)
 				.NotEmpty().WithMessage("Your Job Proposal cannot be empty")
 				.NotNull().WithMessage("Your Job Proposal cannot be null")
-				.Must(x => x.Count() > 0).WithMessage("There must be atleast one job proposal");
+				.Must(x => x?.Any() == true).WithMessage("There must be atleast one job proposal")
+				.Must(x => x?.Any(proposal => proposal.IsBaseBid == true) == true)
+				.WithMessage("A base bid proposal is required");
+			RuleForEach(c => c.BidCustomCharges).ChildRules(charge =>
+			{
+				charge.RuleFor(c => c.Name)
+					.MaximumLength(50).WithMessage("Charge name cannot exceed 50 characters");
+				charge.RuleFor(c => c.Description)
+					.MaximumLength(100).WithMessage("Charge description cannot exceed 100 characters");
+			});
 		}
 	}
 	internal sealed class Handler(CourierJobDbContext jobDbContext,
@@ -110,8 +122,13 @@ public class CreateBid
 			}
 
 			// update job status
-			var job = await jobDbContext.Jobs.FindAsync(request.JobId);
-			var remainingTime = JobsHelper.GetJobRemainingTime(job!.ExpiryDateUtc, DateTime.Now);
+			var job = await jobDbContext.Jobs.FindAsync([request.JobId], cancellationToken);
+			if (job is null)
+			{
+				return new Error("Job not found");
+			}
+
+			var remainingTime = JobsHelper.GetJobRemainingTime(job.ExpiryDateUtc, DateTime.UtcNow);
 
 			if (remainingTime is 0)
 			{

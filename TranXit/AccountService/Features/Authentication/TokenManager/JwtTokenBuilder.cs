@@ -13,6 +13,21 @@ namespace AccountService.Features.Authentication.TokenManager
 	{
 		public string BuildToken(TokenBuilderRequest requestModel)
 		{
+			if (string.IsNullOrWhiteSpace(requestModel.SecretKey) || Encoding.UTF8.GetByteCount(requestModel.SecretKey) < 32)
+			{
+				throw new InvalidOperationException("JWT signing key must be configured and at least 32 bytes.");
+			}
+
+			if (string.IsNullOrWhiteSpace(requestModel.Issuer))
+			{
+				throw new InvalidOperationException("JWT issuer must be configured.");
+			}
+
+			if (string.IsNullOrWhiteSpace(requestModel.Audience))
+			{
+				throw new InvalidOperationException("JWT audience must be configured.");
+			}
+
 			var claims = new ClaimsIdentity(new List<Claim>
 			{
 				new Claim(JwtRegisteredClaimNames.Email, requestModel.Email),
@@ -24,10 +39,17 @@ namespace AccountService.Features.Authentication.TokenManager
 
 			var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(requestModel.SecretKey));
 			var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256Signature);
+			var now = DateTime.UtcNow;
+			var expires = now.AddMinutes(requestModel.ExpiryMinutes);
+			var notBefore = requestModel.ExpiryMinutes < 0 ? expires.AddMinutes(-1) : now;
 			var tokenDescriptor = new SecurityTokenDescriptor
 			{
 				Subject = claims,
-				Expires = DateTime.UtcNow.AddMinutes(requestModel.ExpiryMinutes),
+				Issuer = requestModel.Issuer,
+				Audience = requestModel.Audience,
+				NotBefore = notBefore,
+				IssuedAt = now,
+				Expires = expires,
 				SigningCredentials = credentials
 			};
 			var securityTokenHandler = new JwtSecurityTokenHandler();

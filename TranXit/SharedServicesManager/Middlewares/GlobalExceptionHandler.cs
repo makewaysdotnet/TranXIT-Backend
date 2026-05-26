@@ -11,15 +11,17 @@ namespace SharedServicesManager.Middlewares
 			Exception exception,
 			CancellationToken cancellationToken)
 		{
-			logger.LogError(exception, "Exception occured: {Message}", exception.Message);
+			var correlationId = httpContext.TraceIdentifier;
+			logger.LogError(exception, "Unhandled exception occurred. CorrelationId: {CorrelationId}", correlationId);
 
 			var problemDetails = new ProblemDetails
 			{
 				Status = StatusCodes.Status500InternalServerError,
 				Title = "Server Error",
-				Type = exception.GetType().ToString(),
-				Detail = exception.Message
+				Type = "https://httpstatuses.com/500",
+				Detail = "An unexpected error occurred. Provide the correlationId when contacting support."
 			};
+			problemDetails.Extensions["correlationId"] = correlationId;
 
 			httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
 			await httpContext.Response.WriteAsJsonAsync(problemDetails, cancellationToken);

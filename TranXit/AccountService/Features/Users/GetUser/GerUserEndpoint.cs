@@ -3,6 +3,7 @@ using Carter;
 using Mapster;
 using MediatR;
 using SharedServicesManager;
+using SharedServicesManager.Helpers;
 using System.Net;
 
 namespace AccountService.Features.Users.GetUser;
@@ -14,8 +15,15 @@ public class GetUserEndpoint : CarterModule
 	{ }
 	public override void AddRoutes(IEndpointRouteBuilder app)
 	{
-		app.MapGet("/users/{id:int}", async (int id, ISender sender) =>
+		app.MapGet("/users/{id:int}", async (int id, ISender sender, IHttpContextAccessor httpContext) =>
 		{
+			var currentUserId = HttpContextUser.GetCurrentUserId(httpContext);
+			var currentUserRole = HttpContextUser.GetCurrentUserRole(httpContext);
+			if (id != currentUserId && !string.Equals(currentUserRole, "Admin", StringComparison.OrdinalIgnoreCase))
+			{
+				return Results.Forbid();
+			}
+
 			var query = new GetUser.Query { Id = id };
 			var result = await sender.Send(query);
 
@@ -23,7 +31,8 @@ public class GetUserEndpoint : CarterModule
 		}).RequireAuthorization()
 		.WithTags("Users")
 		.WithOpenApi()
-		.Produces<Result<UserResult>>((int)HttpStatusCode.OK);
+		.Produces<Result<UserResult>>((int)HttpStatusCode.OK)
+		.Produces((int)HttpStatusCode.Forbidden);
 	}
 }
 public class GetUser

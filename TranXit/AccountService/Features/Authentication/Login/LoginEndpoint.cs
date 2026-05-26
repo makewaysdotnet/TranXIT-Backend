@@ -1,5 +1,6 @@
 ﻿using AccountService.Database;
 using AccountService.Features.Authentication.CommonResults;
+using AccountService.Features.Authentication.Refresh;
 using AccountService.Features.Authentication.TokenManager;
 using Carter;
 using FluentValidation;
@@ -63,6 +64,7 @@ public class AccountLogin
 	internal sealed class Handler(AccountDbContext accountDbContext,
 		IValidator<Command> validator,
 		IJwtTokenBuilder jwtTokenBuilder,
+		IRefreshTokenService refreshTokenService,
 		IConfiguration configuration)
 		: IRequestHandler<Command, Result<LoginResult>>
 	{
@@ -91,11 +93,14 @@ public class AccountLogin
 				ExpiryMinutes = double.Parse(configuration["Jwt:ExpiryMinutes"]!),
 				Role = user.Role is not null ? user.Role.Name! : "",
 				SecretKey = configuration["SharedJwtSecrets:Key"]!,
+				Issuer = configuration["Jwt:Issuer"]!,
+				Audience = configuration["Jwt:Audience"]!,
 				UserId = user!.Id.ToString(),
 				Username = user.Username,
 				EmailVerified = user.IsEmailVerified is null ? false : (bool)user.IsEmailVerified!,
 			};
 			var token = jwtTokenBuilder.BuildToken(tokenBuilderRequest);
+			var refreshToken = await refreshTokenService.IssueAsync(user, cancellationToken);
 			return new LoginResult
 			{
 				Id = user.Id,
@@ -105,7 +110,9 @@ public class AccountLogin
 				Role = user.Role is not null ? user.Role.Name! : null,
 				IsEmailVerified = user.IsEmailVerified is null ? false : (bool)user.IsEmailVerified!,
 				Token = token,
-				Expires = DateTime.UtcNow.AddMinutes(tokenBuilderRequest.ExpiryMinutes).ToString(),
+				RefreshToken = refreshToken.Token,
+				RefreshTokenExpires = refreshToken.ExpiresAtUtc.ToString("O"),
+				Expires = DateTime.UtcNow.AddMinutes(tokenBuilderRequest.ExpiryMinutes).ToString("O"),
 			};
 		}
 	}

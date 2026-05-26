@@ -1,10 +1,13 @@
 ﻿using AccountService.Database;
+using AccountService.Features.Authentication;
+using AccountService.Features.Authentication.AccountVerification;
 using AccountService.Features.Authentication.CommonResults;
 using Carter;
 using FluentValidation;
 using Mapster;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using SharedServicesManager;
 using SharedServicesManager.EmailService;
 using SharedServicesManager.Helpers;
@@ -44,6 +47,7 @@ public class AccountRegister
 		public string ConfirmPassword { get; set; } = string.Empty;
 		public string Username { get; set; } = string.Empty;
 		public string Phone { get; set; } = string.Empty;
+		public string? Role { get; set; }
 		public int? RoleId { get; set; }
 	}
 
@@ -78,7 +82,9 @@ public class AccountRegister
 	internal sealed class Handler(AccountDbContext accountDbContext,
 		IValidator<Command> validator,
 		IUtils utils,
-		IMailService mailService)
+		IMailService mailService,
+		IOptions<MailSettings> mailSettings,
+		IHostEnvironment environment)
 		: IRequestHandler<Command, Result<LoginResult>>
 	{
 		public async Task<Result<LoginResult>> Handle(Command request, CancellationToken cancellationToken)
@@ -109,47 +115,56 @@ public class AccountRegister
 			}
 
 			var passwordHash = BC.EnhancedHashPassword(request.Password);
+			var roleResult = await PublicRegistrationRoles.ResolveAsync(
+				accountDbContext,
+				request.Role,
+				request.RoleId,
+				cancellationToken);
+			if (roleResult.Error is not null || roleResult.Role is null)
+			{
+				return new Error(roleResult.Error ?? "Role is invalid");
+			}
+
+			var verificationCode = VerificationCodeHasher.Format(utils.Generate6DRandomCode());
 
 			user = new User
 			{
 				Email = request.Email,
 				PasswordHash = passwordHash,
-				RoleId = request.RoleId,
+				RoleId = roleResult.Role.Id,
 				Username = request.Username,
-				Phone = request.Phone
+				Phone = request.Phone,
+				CodeSentAtUtc = DateTime.UtcNow,
+				VerificationCode = VerificationCodeHasher.Hash(verificationCode)
 			};
 
 			await accountDbContext.AddAsync(user);
 			await accountDbContext.SaveChangesAsync(cancellationToken);
 
-			//Send Email Verification Code
-			//var code = utils.Generate6DRandomCode();
-			//var mailRequest = new MailRequest
-			//{
-			//	EmailTo = [request.Email],
-			//	EmailSubject = "Email Verification",
-			//	EmailBody = $"{code}"
-			//};
-			//var isMailSent = await mailService.SendMail(mailRequest);
-			//if (!isMailSent)
-			//{
-			//	return new Error("User Registered Successfully But Email Sent Failed, Retry Verification");
-			//}
-			//user.CodeSentAtUtc = DateTime.UtcNow;
-			//user.VerificationCode = code;
-
-			//accountDbContext.Users.Update(user);
-			//await accountDbContext.SaveChangesAsync(cancellationToken);
-
+			var mailRequest = new MailRequest
+			{
+				EmailTo = [request.Email],
+				EmailSubject = "Email Verification",
+				EmailBody = verificationCode
+			};
+			var isMailSent = await mailService.SendMail(mailRequest, cancellationToken);
+			if (!isMailSent)
+			{
+				return new Error("User Registered Successfully But Email Sent Failed, Retry Verification");
+			}
 
 			return new LoginResult
 			{
 				Id = user.Id,
 				Email = user.Email,
 				Name = user.Username,
-				RoleId = user.RoleId,
-				Role = user.Role is not null ? user.Role.Name! : null,
-				IsEmailVerified = Convert.ToBoolean(user.IsEmailVerified)
+				RoleId = roleResult.Role.Id,
+				Role = roleResult.Role.Name,
+				IsEmailVerified = Convert.ToBoolean(user.IsEmailVerified),
+				DevelopmentVerificationCode = environment.IsDevelopment() &&
+					mailSettings.Value.DisableSending ?
+					verificationCode :
+					null
 			};
 		}
 	}

@@ -37,9 +37,10 @@ public class ResetPassword
 {
 	public class Command : IRequest<Result<bool>>
 	{
-		public required string Email { get; set; }
-		public required string Password { get; set; }
-		public required string ConfirmPassword { get; set; }
+		public string Email { get; set; } = string.Empty;
+		public string Code { get; set; } = string.Empty;
+		public string Password { get; set; } = string.Empty;
+		public string ConfirmPassword { get; set; } = string.Empty;
 	}
 
 	public class Validator : AbstractValidator<Command>
@@ -47,8 +48,13 @@ public class ResetPassword
 		public Validator()
 		{
 			RuleFor(c => c.Email)
-				.NotEmpty().WithMessage("Your password cannot be empty")
+				.NotEmpty().WithMessage("Your email cannot be empty")
 				.EmailAddress().WithMessage("Invalid Email Address");
+
+			RuleFor(c => c.Code)
+				.NotEmpty().WithMessage("Code cannot be empty")
+				.Length(6).WithMessage("Invalid Code")
+				.Matches(@"^\d{6}$").WithMessage("Invalid Code");
 
 			RuleFor(c => c.Password)
 				.NotEmpty().WithMessage("Your password cannot be empty")
@@ -67,7 +73,8 @@ public class ResetPassword
 		}
 
 		internal sealed class Handler(AccountDbContext accountDbContext,
-			IValidator<Command> validator)
+			IValidator<Command> validator,
+			IConfiguration configuration)
 			: IRequestHandler<Command, Result<bool>>
 		{
 			public async Task<Result<bool>> Handle(Command request, CancellationToken cancellationToken)
@@ -83,13 +90,29 @@ public class ResetPassword
 				{
 					return new Error("User doesn't exist");
 				}
+				if (user.VerificationCode is null || user.CodeSentAtUtc is null)
+				{
+					return new Error("Invalid Code");
+				}
+				if (!VerificationCodeHasher.Verify(request.Code, user.VerificationCode))
+				{
+					return new Error("Invalid Code");
+				}
+				var expiryTime = int.Parse(configuration["CodeVerification:ExpiryMinutes"]!);
+				var expiresAt = user.CodeSentAtUtc.Value.AddMinutes(expiryTime);
+				if (DateTime.UtcNow > expiresAt)
+				{
+					return new Error("Code Expired");
+				}
 
 				var passwordHash = BC.EnhancedHashPassword(request.Password);
 
 				user.PasswordHash = passwordHash;
+				user.VerificationCode = null;
+				user.CodeSentAtUtc = null;
 
 				accountDbContext.Users.Update(user);
-				return await accountDbContext.SaveChangesAsync() > 0;
+				return await accountDbContext.SaveChangesAsync(cancellationToken) > 0;
 			}
 		}
 	}

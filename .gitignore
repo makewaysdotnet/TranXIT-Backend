@@ -25,7 +25,12 @@ Version.cpp
 /TranXit/bin
 
 /TranXit/.env
+/TranXit/.env.local
+/TranXit/.env.*.local
 /TranXit/.containers/
+
+/TranXit/**/appsettings.Local.json
+/TranXit/**/appsettings.*.local.json
 
 /TranXit/AccountService/obj
 /TranXit/AccountService/bin

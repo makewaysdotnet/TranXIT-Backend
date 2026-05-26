@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using SharedServicesManager;
 using SharedServicesManager.Helpers;
 using System.Net;
+using System.Security.Claims;
 
 namespace CourierJobService.Features.Jobs.GetJobDetail;
 
@@ -25,6 +26,10 @@ public class GetJobDetailEndpoint : CarterModule
 			var result = await sender.Send(query);
 			if (!result.isSuccess)
 			{
+				if (result.error.Contains(GetJobDetail.ForbiddenError))
+				{
+					return Results.Forbid();
+				}
 				return Results.BadRequest(result);
 			}
 			return Results.Ok(result);
@@ -37,6 +42,8 @@ public class GetJobDetailEndpoint : CarterModule
 }
 public class GetJobDetail
 {
+	public const string ForbiddenError = "Forbidden";
+
 	public sealed class Query : IRequest<Result<JobDetailResult>>
 	{
 		public required int jobId { get; set; }
@@ -68,6 +75,12 @@ public class GetJobDetail
 				return new Error("Job Detail not found");
 			}
 			var currentUserRole = HttpContextUser.GetCurrentUserRole(httpContext);
+			var currentUserId = HttpContextUser.GetCurrentUserId(httpContext);
+
+			if (currentUserRole == "Customer" && jobDetail.UserId != currentUserId)
+			{
+				return new Error(ForbiddenError);
+			}
 
 			var jobDetaliResult = new JobDetailResult
 			{
@@ -84,7 +97,7 @@ public class GetJobDetail
 				JobNumber = jobDetail.JobNumber,
 				Status = currentUserRole == "Customer" ?
 					JobsHelper.GetJobStatus(jobDetail, jobDetail.Biddings, null).Item2 :
-					JobsHelper.GetJobStatus(jobDetail, jobDetail.Biddings, HttpContextUser.GetCurrentUserId(httpContext)).Item2,
+					JobsHelper.GetJobStatus(jobDetail, jobDetail.Biddings, currentUserId).Item2,
 				JobItems = jobDetail.JobItems!.Select(y => new JobItemResult
 				{
 					JobItemId = y.Id,
@@ -103,6 +116,12 @@ public class GetJobDetail
 					}
 				})
 			};
+
+			if (currentUserRole == "Customer")
+			{
+				jobDetaliResult.CustomerName = httpContext.HttpContext?.User.FindFirstValue(ClaimTypes.GivenName) ?? string.Empty;
+				return jobDetaliResult;
+			}
 
 			var userResult = await UserRequest.GetUserAsync(jobDetaliResult!.UserId, messageBus);
 			if (userResult is null)
