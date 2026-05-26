@@ -73,15 +73,25 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddMassTransit(busConfigurator =>
 {
 	busConfigurator.SetKebabCaseEndpointNameFormatter();
-	busConfigurator.UsingRabbitMq((context, configurator) =>
+	if (builder.Environment.IsEnvironment("Testing"))
 	{
-		configurator.Host(builder.Configuration["RabbitMQ:HostName"]!, "/", c =>
+		busConfigurator.UsingInMemory((context, configurator) =>
 		{
-			c.Username(builder.Configuration["RabbitMQ:UserName"]!);
-			c.Password(builder.Configuration["RabbitMQ:Password"]!);
+			configurator.ConfigureEndpoints(context);
 		});
-		configurator.ConfigureEndpoints(context);
-	});
+	}
+	else
+	{
+		busConfigurator.UsingRabbitMq((context, configurator) =>
+		{
+			configurator.Host(builder.Configuration["RabbitMQ:HostName"]!, "/", c =>
+			{
+				c.Username(builder.Configuration["RabbitMQ:UserName"]!);
+				c.Password(builder.Configuration["RabbitMQ:Password"]!);
+			});
+			configurator.ConfigureEndpoints(context);
+		});
+	}
 });
 builder.Services.AddCors();
 
