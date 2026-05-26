@@ -9,7 +9,14 @@ public sealed class TokenFactory
 {
 	private readonly JwtTokenBuilder _jwtTokenBuilder = new();
 
-	public string ForUser(int userId, string role, string? email = null, bool emailVerified = true)
+	public string ForUser(
+		int userId,
+		string role,
+		string? email = null,
+		bool emailVerified = true,
+		string? issuer = null,
+		string? audience = null,
+		double? expiryMinutes = null)
 		=> _jwtTokenBuilder.BuildToken(new TokenBuilderRequest
 		{
 			UserId = userId.ToString(),
@@ -18,8 +25,8 @@ public sealed class TokenFactory
 			Email = email ?? $"{role.ToLowerInvariant()}.{userId}@tranxit.test",
 			EmailVerified = emailVerified,
 			SecretKey = TestConfiguration.SigningKey,
-			Issuer = TestConfiguration.Issuer,
-			Audience = TestConfiguration.Audience,
-			ExpiryMinutes = TestConfiguration.ExpiryMinutes
+			Issuer = issuer ?? TestConfiguration.Issuer,
+			Audience = audience ?? TestConfiguration.Audience,
+			ExpiryMinutes = expiryMinutes ?? TestConfiguration.ExpiryMinutes
 		});
 }

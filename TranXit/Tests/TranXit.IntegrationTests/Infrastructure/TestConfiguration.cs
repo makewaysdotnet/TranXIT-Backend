@@ -17,6 +17,8 @@ internal static class TestConfiguration
 			["Jwt:ExpiryMinutes"] = ExpiryMinutes.ToString(),
 			["Jwt:RequireHttpsMetadata"] = "false",
 			["SharedJwtSecrets:Key"] = SigningKey,
+			["CodeVerification:ExpiryMinutes"] = "60",
+			["Jobs:ExpiryTimeInMinutes"] = "10080",
 			["MailSettings:DisableSending"] = "true",
 			["RabbitMQ:HostName"] = "unused-in-testing",
 			["RabbitMQ:UserName"] = "unused-in-testing",
@@ -38,6 +40,8 @@ internal static class TestConfiguration
 		Environment.SetEnvironmentVariable("Jwt__ExpiryMinutes", ExpiryMinutes.ToString());
 		Environment.SetEnvironmentVariable("Jwt__RequireHttpsMetadata", "false");
 		Environment.SetEnvironmentVariable("SharedJwtSecrets__Key", SigningKey);
+		Environment.SetEnvironmentVariable("CodeVerification__ExpiryMinutes", "60");
+		Environment.SetEnvironmentVariable("Jobs__ExpiryTimeInMinutes", "10080");
 		Environment.SetEnvironmentVariable("MailSettings__DisableSending", "true");
 		Environment.SetEnvironmentVariable("RabbitMQ__HostName", "unused-in-testing");
 		Environment.SetEnvironmentVariable("RabbitMQ__UserName", "unused-in-testing");

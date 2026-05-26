@@ -1,0 +1,36 @@
+name: Backend Tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - feature/web-first-mvp
+      - main
+
+jobs:
+  dotnet:
+    name: dotnet build and test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: TranXit
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Verify Docker
+        run: docker info
+
+      - name: Restore
+        run: dotnet restore TranXit.sln
+
+      - name: Build
+        run: dotnet build TranXit.sln --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test TranXit.sln --no-build --configuration Release --logger "trx;LogFileName=test-results.trx"
