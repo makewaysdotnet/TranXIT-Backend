@@ -1,4 +1,5 @@
 using AccountService.Database;
+using AccountService.Features.Authentication.Refresh;
 using AccountService.Features.Authentication.TokenManager;
 using Carter;
 using FluentValidation;
@@ -47,6 +48,7 @@ var assembly = typeof(Program).Assembly;
 builder.Services.AddMediatR(config =>
 	config.RegisterServicesFromAssembly(assembly));
 builder.Services.AddScoped<IJwtTokenBuilder, JwtTokenBuilder>();
+builder.Services.AddScoped<IRefreshTokenService, RefreshTokenService>();
 builder.Services.AddScoped<IMailService, MailService>();
 builder.Services.AddScoped<IUtils, Utils>();
 
@@ -106,6 +108,11 @@ builder.Services.AddCors();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
+if (!app.Environment.IsEnvironment("Testing"))
+{
+	await AccountDatabaseMigrator.MigrateAsync(app.Services);
+}
+
 if (app.Environment.IsDevelopment())
 {
 	await AccountDevelopmentSeeder.SeedAsync(app.Services);

@@ -48,7 +48,8 @@ public class VerifyCode
 				.EmailAddress().WithMessage("Invalid Email Address");
 			RuleFor(c => c.Code)
 				.NotEmpty().WithMessage("Code cannot be empty")
-				.Length(6).WithMessage("Invalid Code");
+				.Length(6).WithMessage("Invalid Code")
+				.Matches(@"^\d{6}$").WithMessage("Invalid Code");
 		}
 	}
 	internal sealed class Handler(AccountDbContext accountDbContext,
@@ -72,7 +73,7 @@ public class VerifyCode
 				return new Error("User doesn't exist");
 			}
 			var expiryTime = int.Parse(configuration["CodeVerification:ExpiryMinutes"]!);
-			if (user.VerificationCode != int.Parse(request.Code))
+			if (!VerificationCodeHasher.Verify(request.Code, user.VerificationCode))
 			{
 				return new Error("Invalid Code");
 			}
@@ -82,6 +83,8 @@ public class VerifyCode
 				return new Error("Code Expired");
 			}
 			user.IsEmailVerified = true;
+			user.VerificationCode = null;
+			user.CodeSentAtUtc = null;
 			accountDbContext.Users.Update(user);
 			await accountDbContext.SaveChangesAsync(cancellationToken);
 			result = true;

@@ -66,6 +66,8 @@ public sealed class AuthenticationRegressionTests(SqlContainerFixture fixture) :
 		user.Should().NotBeNull();
 		user!.Email.Should().Be("new-customer@tranxit.test");
 		user.RoleId.Should().Be(1);
+		user.VerificationCode.Should().NotBeNullOrWhiteSpace();
+		user.VerificationCode.Should().NotMatchRegex(@"^\d{6}$");
 	}
 
 	[Fact(DisplayName = "T-AUTH-6.GoogleLoginAdminBlocked")]

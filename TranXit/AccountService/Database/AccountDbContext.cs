@@ -15,6 +15,8 @@ public partial class AccountDbContext : DbContext
 
 	public virtual DbSet<Role> Roles { get; set; }
 
+	public virtual DbSet<RefreshToken> RefreshTokens { get; set; }
+
 	public virtual DbSet<User> Users { get; set; }
 
 	public virtual DbSet<UserFile> UserFiles { get; set; }
@@ -30,6 +32,19 @@ public partial class AccountDbContext : DbContext
 				.IsUnicode(false);
 		});
 
+		modelBuilder.Entity<RefreshToken>(entity =>
+		{
+			entity.Property(e => e.CreatedAtUtc).HasColumnType("datetime");
+			entity.Property(e => e.ExpiresAtUtc).HasColumnType("datetime");
+			entity.Property(e => e.RevokedAtUtc).HasColumnType("datetime");
+			entity.Property(e => e.TokenHash).HasMaxLength(200);
+
+			entity.HasOne(d => d.User).WithMany(p => p.RefreshTokens)
+				.HasForeignKey(d => d.UserId)
+				.OnDelete(DeleteBehavior.Cascade)
+				.HasConstraintName("FK_RefreshTokens_Users");
+		});
+
 		modelBuilder.Entity<User>(entity =>
 		{
 			entity.Property(e => e.CodeSentAtUtc).HasColumnType("datetime");
@@ -37,6 +52,7 @@ public partial class AccountDbContext : DbContext
 			entity.Property(e => e.Phone).HasMaxLength(50);
 			entity.Property(e => e.Provider).HasMaxLength(100);
 			entity.Property(e => e.Username).HasMaxLength(256);
+			entity.Property(e => e.VerificationCode).HasMaxLength(200);
 
 			entity.HasOne(d => d.Role).WithMany(p => p.Users)
 				.HasForeignKey(d => d.RoleId)

@@ -1,5 +1,6 @@
 ﻿using AccountService.Database;
 using AccountService.Features.Authentication;
+using AccountService.Features.Authentication.AccountVerification;
 using AccountService.Features.Authentication.CommonResults;
 using Carter;
 using FluentValidation;
@@ -124,7 +125,7 @@ public class AccountRegister
 				return new Error(roleResult.Error ?? "Role is invalid");
 			}
 
-			var verificationCode = utils.Generate6DRandomCode();
+			var verificationCode = VerificationCodeHasher.Format(utils.Generate6DRandomCode());
 
 			user = new User
 			{
@@ -134,7 +135,7 @@ public class AccountRegister
 				Username = request.Username,
 				Phone = request.Phone,
 				CodeSentAtUtc = DateTime.UtcNow,
-				VerificationCode = verificationCode
+				VerificationCode = VerificationCodeHasher.Hash(verificationCode)
 			};
 
 			await accountDbContext.AddAsync(user);
@@ -144,7 +145,7 @@ public class AccountRegister
 			{
 				EmailTo = [request.Email],
 				EmailSubject = "Email Verification",
-				EmailBody = $"{verificationCode:D6}"
+				EmailBody = verificationCode
 			};
 			var isMailSent = await mailService.SendMail(mailRequest, cancellationToken);
 			if (!isMailSent)
@@ -162,7 +163,7 @@ public class AccountRegister
 				IsEmailVerified = Convert.ToBoolean(user.IsEmailVerified),
 				DevelopmentVerificationCode = environment.IsDevelopment() &&
 					mailSettings.Value.DisableSending ?
-					$"{verificationCode:D6}" :
+					verificationCode :
 					null
 			};
 		}
