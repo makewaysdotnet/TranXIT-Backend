@@ -1,6 +1,7 @@
 ﻿using AccountService.Database;
 using AccountService.Features.Authentication;
 using AccountService.Features.Authentication.CommonResults;
+using AccountService.Features.Authentication.Refresh;
 using AccountService.Features.Authentication.TokenManager;
 using Carter;
 using FluentValidation;
@@ -68,6 +69,7 @@ public class AccountGoogleLogin
 	internal sealed class Handler(AccountDbContext accountDbContext,
 		IValidator<Command> validator,
 		IJwtTokenBuilder jwtTokenBuilder,
+		IRefreshTokenService refreshTokenService,
 		IConfiguration configuration)
 		: IRequestHandler<Command, Result<LoginResult>>
 	{
@@ -154,6 +156,7 @@ public class AccountGoogleLogin
 				EmailVerified = true
 			};
 			var token = jwtTokenBuilder.BuildToken(tokenBuilderRequest);
+			var refreshToken = await refreshTokenService.IssueAsync(user, cancellationToken);
 			return new LoginResult
 			{
 				Id = user.Id,
@@ -165,8 +168,10 @@ public class AccountGoogleLogin
 					provider :
 					request.Provider,
 				IsEmailVerified = user.IsEmailVerified is null ? false : (bool)user.IsEmailVerified!,
-				Expires = DateTime.UtcNow.AddMinutes(tokenBuilderRequest.ExpiryMinutes).ToString(),
-				Token = token
+				Expires = DateTime.UtcNow.AddMinutes(tokenBuilderRequest.ExpiryMinutes).ToString("O"),
+				Token = token,
+				RefreshToken = refreshToken.Token,
+				RefreshTokenExpires = refreshToken.ExpiresAtUtc.ToString("O")
 			};
 		}
 	}

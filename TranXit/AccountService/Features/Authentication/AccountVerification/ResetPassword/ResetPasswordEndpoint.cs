@@ -94,7 +94,7 @@ public class ResetPassword
 				{
 					return new Error("Invalid Code");
 				}
-				if (user.VerificationCode != int.Parse(request.Code))
+				if (!VerificationCodeHasher.Verify(request.Code, user.VerificationCode))
 				{
 					return new Error("Invalid Code");
 				}

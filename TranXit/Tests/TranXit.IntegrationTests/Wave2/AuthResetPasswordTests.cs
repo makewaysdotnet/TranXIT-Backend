@@ -5,7 +5,7 @@ namespace TranXit.IntegrationTests.Wave2;
 public sealed class AuthResetPasswordTests(SqlContainerFixture fixture) : IntegrationTestBase(fixture)
 {
 	private const string CustomerEmail = "customer.seed@tranxit.test";
-	private const int ResetCode = 223344;
+	private const string ResetCode = "223344";
 	private const string NewPassword = "Newpass1!";
 
 	[Fact(DisplayName = "T-AUTH-5.ResetMissingCode400")]
@@ -95,6 +95,34 @@ public sealed class AuthResetPasswordTests(SqlContainerFixture fixture) : Integr
 		loginResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 	}
 
+	[Fact(DisplayName = "T-AUTH-5.LeadingZeroCode200")]
+	public async Task ResetLeadingZeroValid200()
+	{
+		// UC-AUTH-5
+		await SetResetCodeAsync(DateTime.UtcNow, "012345");
+
+		var response = await AccountClient.PostAsJsonAsync("/api/reset-password", ResetPayload("012345"));
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		var result = await response.ReadApiResultAsync<bool>();
+		result.IsSuccess.Should().BeTrue();
+		result.Value.Should().BeTrue();
+	}
+
+	[Fact(DisplayName = "T-AUTH-5.CodeStoredHashed")]
+	public async Task CodeStoredHashed()
+	{
+		// UC-AUTH-5
+		await SetResetCodeAsync(DateTime.UtcNow);
+
+		await using var db = Fixture.CreateAccountDbContext();
+		var user = await db.Users.FindAsync(1);
+
+		user!.VerificationCode.Should().NotBeNullOrWhiteSpace();
+		user.VerificationCode.Should().NotBe(ResetCode);
+		BCrypt.Net.BCrypt.EnhancedVerify(ResetCode, user.VerificationCode).Should().BeTrue();
+	}
+
 	private static object ResetPayload(string code = "223344")
 		=> new
 		{
@@ -104,11 +132,11 @@ public sealed class AuthResetPasswordTests(SqlContainerFixture fixture) : Integr
 			confirmPassword = NewPassword
 		};
 
-	private async Task SetResetCodeAsync(DateTime sentAtUtc)
+	private async Task SetResetCodeAsync(DateTime sentAtUtc, string code = ResetCode)
 	{
 		await using var db = Fixture.CreateAccountDbContext();
 		var user = await db.Users.FindAsync(1);
-		user!.VerificationCode = ResetCode;
+		user!.VerificationCode = BCrypt.Net.BCrypt.EnhancedHashPassword(code);
 		user.CodeSentAtUtc = sentAtUtc;
 		await db.SaveChangesAsync();
 	}

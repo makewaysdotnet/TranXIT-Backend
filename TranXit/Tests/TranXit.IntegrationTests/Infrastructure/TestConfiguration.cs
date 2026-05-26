@@ -15,6 +15,7 @@ internal static class TestConfiguration
 			["Jwt:Issuer"] = Issuer,
 			["Jwt:Audience"] = Audience,
 			["Jwt:ExpiryMinutes"] = ExpiryMinutes.ToString(),
+			["Jwt:RefreshExpiryDays"] = "14",
 			["Jwt:RequireHttpsMetadata"] = "false",
 			["SharedJwtSecrets:Key"] = SigningKey,
 			["CodeVerification:ExpiryMinutes"] = "60",
@@ -38,6 +39,7 @@ internal static class TestConfiguration
 		Environment.SetEnvironmentVariable("Jwt__Issuer", Issuer);
 		Environment.SetEnvironmentVariable("Jwt__Audience", Audience);
 		Environment.SetEnvironmentVariable("Jwt__ExpiryMinutes", ExpiryMinutes.ToString());
+		Environment.SetEnvironmentVariable("Jwt__RefreshExpiryDays", "14");
 		Environment.SetEnvironmentVariable("Jwt__RequireHttpsMetadata", "false");
 		Environment.SetEnvironmentVariable("SharedJwtSecrets__Key", SigningKey);
 		Environment.SetEnvironmentVariable("CodeVerification__ExpiryMinutes", "60");

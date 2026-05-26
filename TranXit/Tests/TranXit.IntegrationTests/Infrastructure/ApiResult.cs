@@ -22,6 +22,8 @@ internal sealed record LoginValue(
 	[property: JsonPropertyName("role")] string? Role,
 	[property: JsonPropertyName("isEmailVerified")] bool IsEmailVerified,
 	[property: JsonPropertyName("token")] string? Token,
+	[property: JsonPropertyName("refreshToken")] string? RefreshToken,
+	[property: JsonPropertyName("refreshTokenExpires")] string? RefreshTokenExpires,
 	[property: JsonPropertyName("expires")] string? Expires,
 	[property: JsonPropertyName("developmentVerificationCode")] string? DevelopmentVerificationCode);
 

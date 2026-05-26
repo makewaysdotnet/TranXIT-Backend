@@ -70,12 +70,12 @@ public class SendCode
 				return new Error("User doesn't exist");
 			}
 
-			var code = utils.Generate6DRandomCode();
+			var code = VerificationCodeHasher.Format(utils.Generate6DRandomCode());
 			var mailRequest = new MailRequest
 			{
 				EmailTo = [user.Email],
 				EmailSubject = "Verification Code",
-				EmailBody = $"{code}"
+				EmailBody = code
 			};
 			var IsEmailSent = await mailService.SendMail(mailRequest);
 			if (!IsEmailSent)
@@ -83,7 +83,7 @@ public class SendCode
 				return new Error("Failed to Send Email");
 			}
 			user.CodeSentAtUtc = DateTime.UtcNow;
-			user.VerificationCode = code;
+			user.VerificationCode = VerificationCodeHasher.Hash(code);
 
 			accountDbContext.Users.Update(user);
 			await accountDbContext.SaveChangesAsync(cancellationToken);

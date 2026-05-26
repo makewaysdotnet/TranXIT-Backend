@@ -98,6 +98,11 @@ builder.Services.AddCors();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
+if (!app.Environment.IsEnvironment("Testing"))
+{
+	await CourierJobDatabaseMigrator.MigrateAsync(app.Services);
+}
+
 if (app.Environment.IsDevelopment())
 {
 	await CourierJobDevelopmentSeeder.SeedAsync(app.Services);

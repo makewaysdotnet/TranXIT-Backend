@@ -11,6 +11,8 @@ namespace AccountService.Features.Authentication.CommonResults
 		public int? RoleId { get; init; } = null;
 		public ExternalLoginProviderEnum? Provider { get; init; } = null;
 		public string Token { get; init; } = string.Empty;
+		public string? RefreshToken { get; init; }
+		public string? RefreshTokenExpires { get; init; }
 		public bool IsEmailVerified { get; init; } = false;
 		public string Expires { get; init; } = string.Empty;
 		public string? DevelopmentVerificationCode { get; init; }

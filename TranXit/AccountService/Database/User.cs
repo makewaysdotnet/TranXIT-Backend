@@ -16,7 +16,7 @@ public partial class User
 
 	public bool? IsEmailVerified { get; set; }
 
-	public int? VerificationCode { get; set; }
+	public string? VerificationCode { get; set; }
 
 	public DateTime? CodeSentAtUtc { get; set; }
 
@@ -27,4 +27,6 @@ public partial class User
 	public virtual ICollection<UserFile> UserFiles { get; set; } = new List<UserFile>();
 
 	public virtual UserImage? UserImage { get; set; }
+
+	public virtual ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
 }

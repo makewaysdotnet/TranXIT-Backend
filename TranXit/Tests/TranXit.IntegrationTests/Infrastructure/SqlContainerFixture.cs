@@ -90,6 +90,12 @@ public sealed class SqlContainerFixture : IAsyncLifetime
 		return new CourierJobDbContext(options);
 	}
 
+	public string BuildTemporaryConnectionString(string databasePrefix)
+	{
+		var safePrefix = databasePrefix.Replace('-', '_');
+		return BuildConnectionString($"{safePrefix}_{Guid.NewGuid():N}");
+	}
+
 	private async Task EnsureSchemasAsync()
 	{
 		await using (var accountDb = CreateAccountDbContext())

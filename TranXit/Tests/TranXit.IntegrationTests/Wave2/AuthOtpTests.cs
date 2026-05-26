@@ -5,7 +5,7 @@ namespace TranXit.IntegrationTests.Wave2;
 public sealed class AuthOtpTests(SqlContainerFixture fixture) : IntegrationTestBase(fixture)
 {
 	private const string CustomerEmail = "customer.seed@tranxit.test";
-	private const int VerificationCode = 123456;
+	private const string VerificationCode = "123456";
 
 	[Fact(DisplayName = "T-AUTH-2.VerifyOtpMissingCode400")]
 	public async Task VerifyOtpMissingCode400()
@@ -30,7 +30,7 @@ public sealed class AuthOtpTests(SqlContainerFixture fixture) : IntegrationTestB
 		var response = await AccountClient.PostAsJsonAsync("/api/verify-code", new
 		{
 			email = CustomerEmail,
-			code = 654321
+			code = "654321"
 		});
 
 		response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -77,13 +77,33 @@ public sealed class AuthOtpTests(SqlContainerFixture fixture) : IntegrationTestB
 		await using var db = Fixture.CreateAccountDbContext();
 		var user = await db.Users.FindAsync(1);
 		user!.IsEmailVerified.Should().BeTrue();
+		user.VerificationCode.Should().BeNull();
+		user.CodeSentAtUtc.Should().BeNull();
 	}
 
-	private async Task SetVerificationCodeAsync(DateTime sentAtUtc)
+	[Fact(DisplayName = "T-AUTH-2.LeadingZeroCode200")]
+	public async Task VerifyOtpLeadingZeroValid200()
+	{
+		// UC-AUTH-2
+		await SetVerificationCodeAsync(DateTime.UtcNow, "012345");
+
+		var response = await AccountClient.PostAsJsonAsync("/api/verify-code", new
+		{
+			email = CustomerEmail,
+			code = "012345"
+		});
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		var result = await response.ReadApiResultAsync<bool>();
+		result.IsSuccess.Should().BeTrue();
+		result.Value.Should().BeTrue();
+	}
+
+	private async Task SetVerificationCodeAsync(DateTime sentAtUtc, string code = VerificationCode)
 	{
 		await using var db = Fixture.CreateAccountDbContext();
 		var user = await db.Users.FindAsync(1);
-		user!.VerificationCode = VerificationCode;
+		user!.VerificationCode = BCrypt.Net.BCrypt.EnhancedHashPassword(code);
 		user.CodeSentAtUtc = sentAtUtc;
 		user.IsEmailVerified = false;
 		await db.SaveChangesAsync();
