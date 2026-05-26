@@ -39,12 +39,17 @@ namespace AccountService.Features.Authentication.TokenManager
 
 			var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(requestModel.SecretKey));
 			var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256Signature);
+			var now = DateTime.UtcNow;
+			var expires = now.AddMinutes(requestModel.ExpiryMinutes);
+			var notBefore = requestModel.ExpiryMinutes < 0 ? expires.AddMinutes(-1) : now;
 			var tokenDescriptor = new SecurityTokenDescriptor
 			{
 				Subject = claims,
 				Issuer = requestModel.Issuer,
 				Audience = requestModel.Audience,
-				Expires = DateTime.UtcNow.AddMinutes(requestModel.ExpiryMinutes),
+				NotBefore = notBefore,
+				IssuedAt = now,
+				Expires = expires,
 				SigningCredentials = credentials
 			};
 			var securityTokenHandler = new JwtSecurityTokenHandler();
