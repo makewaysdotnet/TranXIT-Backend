@@ -30,10 +30,10 @@ public abstract class IntegrationTestBase(SqlContainerFixture fixture) : IAsyncL
 
 	public Task DisposeAsync()
 	{
-		AccountClient.Dispose();
-		CourierClient.Dispose();
 		_accountFactory?.Dispose();
 		_courierJobFactory?.Dispose();
+		AccountClient.Dispose();
+		CourierClient.Dispose();
 		return Task.CompletedTask;
 	}
 }
