@@ -22,10 +22,44 @@ internal sealed class AccountServiceFactory : WebApplicationFactory<AccountProgr
 	{
 		TestConfiguration.ApplyToProcessEnvironment(_fixture.AccountConnectionString);
 		builder.UseEnvironment("Testing");
+		builder.UseDefaultServiceProvider((_, options) =>
+		{
+			options.ValidateScopes = true;
+			options.ValidateOnBuild = true;
+		});
 		builder.ConfigureAppConfiguration((_, configuration) =>
 		{
 			configuration.AddInMemoryCollection(
 				TestConfiguration.ForService(_fixture.AccountConnectionString));
 		});
+	}
+
+	protected override void Dispose(bool disposing)
+	{
+		if (disposing)
+		{
+			MassTransitTestTeardown.StopBus(Services);
+		}
+
+		try
+		{
+			base.Dispose(disposing);
+		}
+		catch (Exception exception) when (disposing && MassTransitTestTeardown.IsBenignTeardownRace(exception))
+		{
+		}
+	}
+
+	public override async ValueTask DisposeAsync()
+	{
+		await MassTransitTestTeardown.StopBusAsync(Services);
+
+		try
+		{
+			await base.DisposeAsync();
+		}
+		catch (Exception exception) when (MassTransitTestTeardown.IsBenignTeardownRace(exception))
+		{
+		}
 	}
 }
