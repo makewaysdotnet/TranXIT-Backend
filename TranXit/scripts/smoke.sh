@@ -91,4 +91,30 @@ login_body="{\"email\":\"$login_email\",\"password\":\"$login_password\"}"
 login_code="$(request_code POST /api/login "$login_body")"
 expect_code "Customer login" "200" "$login_code"
 
+if [ -n "${TRANXIT_E2E_MAIL_INBOX:-}" ]; then
+  if [ -z "${TRANXIT_SMOKE_DOCKER_NETWORK:-}" ]; then
+    echo "FAIL: TRANXIT_E2E_MAIL_INBOX is set, but TRANXIT_SMOKE_DOCKER_NETWORK is not set." >&2
+    exit 1
+  fi
+
+  mailpit_base_url="${TRANXIT_MAILPIT_INTERNAL_URL:-http://mailpit:8025}"
+  mailpit_url="${mailpit_base_url%/}/api/v1/info"
+  mailpit_args=(run --rm --network "$TRANXIT_SMOKE_DOCKER_NETWORK" curlimages/curl:8.13.0 -fsS)
+
+  if [ -n "${TRANXIT_E2E_MAIL_INBOX_USER:-}" ] || [ -n "${TRANXIT_E2E_MAIL_INBOX_PASSWORD:-}" ]; then
+    if [ -z "${TRANXIT_E2E_MAIL_INBOX_USER:-}" ] || [ -z "${TRANXIT_E2E_MAIL_INBOX_PASSWORD:-}" ]; then
+      echo "FAIL: Mailpit basic-auth user and password must both be set or both omitted." >&2
+      exit 1
+    fi
+    mailpit_args+=(-u "$TRANXIT_E2E_MAIL_INBOX_USER:$TRANXIT_E2E_MAIL_INBOX_PASSWORD")
+  fi
+
+  if ! docker "${mailpit_args[@]}" "$mailpit_url" >/tmp/tranxit-smoke-mailpit.json; then
+    echo "FAIL: Mailpit health endpoint was not reachable from Docker network $TRANXIT_SMOKE_DOCKER_NETWORK" >&2
+    exit 1
+  fi
+
+  echo "PASS: Mailpit health endpoint reachable from Docker network"
+fi
+
 echo "TranXIT smoke checks passed for $BASE_URL"

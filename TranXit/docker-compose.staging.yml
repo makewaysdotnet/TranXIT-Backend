@@ -1,0 +1,43 @@
+services:
+  caddy:
+    environment:
+      MAILPIT_DOMAIN: ${MAILPIT_DOMAIN:?Set MAILPIT_DOMAIN}
+      MAILPIT_BASIC_AUTH_USER: ${MAILPIT_BASIC_AUTH_USER:?Set MAILPIT_BASIC_AUTH_USER}
+      MAILPIT_BASIC_AUTH_HASH: ${MAILPIT_BASIC_AUTH_HASH:?Set MAILPIT_BASIC_AUTH_HASH}
+    volumes:
+      - ./ops/Caddyfile.staging:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      mailpit:
+        condition: service_started
+
+  accountservice:
+    environment:
+      MailSettings__Server: mailpit
+      MailSettings__Port: "1025"
+      MailSettings__UserName: ""
+      MailSettings__Password: ""
+    depends_on:
+      mailpit:
+        condition: service_started
+
+  courierjobservice:
+    environment:
+      MailSettings__Server: mailpit
+      MailSettings__Port: "1025"
+      MailSettings__UserName: ""
+      MailSettings__Password: ""
+    depends_on:
+      mailpit:
+        condition: service_started
+
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    expose:
+      - "1025"
+      - "8025"
+    ports: !reset []
+    networks:
+      - backend
