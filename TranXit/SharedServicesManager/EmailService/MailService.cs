@@ -41,7 +41,10 @@ public class MailService(IOptions<MailSettings> mailSettings) : IMailService
 			using (SmtpClient mailClient = new SmtpClient())
 			{
 				await mailClient.ConnectAsync(_mailSettings.Server, _mailSettings.Port, MailKit.Security.SecureSocketOptions.Auto, cancellationToken);
-				await mailClient.AuthenticateAsync(_mailSettings.UserName, _mailSettings.Password, cancellationToken);
+				if (!string.IsNullOrWhiteSpace(_mailSettings.UserName) || !string.IsNullOrWhiteSpace(_mailSettings.Password))
+				{
+					await mailClient.AuthenticateAsync(_mailSettings.UserName, _mailSettings.Password, cancellationToken);
+				}
 				await mailClient.SendAsync(emailMessage, cancellationToken);
 				await mailClient.DisconnectAsync(true, cancellationToken);
 			}

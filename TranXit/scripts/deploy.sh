@@ -66,6 +66,15 @@ set -a
 . "$ENV_FILE"
 set +a
 
+if [ "$TARGET_ENV" = "production" ]; then
+  for mailpit_var in MAILPIT_DOMAIN MAILPIT_BASIC_AUTH_USER MAILPIT_BASIC_AUTH_HASH TRANXIT_E2E_MAIL_INBOX; do
+    if [ -n "${!mailpit_var:-}" ]; then
+      echo "Refusing production deploy: $mailpit_var is set, but Mailpit is staging-only." >&2
+      exit 1
+    fi
+  done
+fi
+
 FRONTEND_DIR="${TRANXIT_FRONTEND_DIR:-$(cd "$BACKEND_REPO_DIR/../frontend" 2>/dev/null && pwd || true)}"
 if [ -z "$FRONTEND_DIR" ] || [ ! -d "$FRONTEND_DIR/.git" ]; then
   echo "Frontend repo not found. Set TRANXIT_FRONTEND_DIR in $ENV_FILE." >&2
@@ -102,11 +111,19 @@ export TRANXIT_FRONTEND_BUILD_CONTEXT="${TRANXIT_FRONTEND_BUILD_CONTEXT:-$FRONTE
 export TRANXIT_INTERNAL_API_URL="${TRANXIT_INTERNAL_API_URL:-http://ocelotapigw:8080}"
 
 project_name="tranxit-$TARGET_ENV"
+compose_files=(
+  -f "$PROJECT_DIR/docker-compose.yml"
+  -f "$PROJECT_DIR/docker-compose.prod.yml"
+)
+
+if [ "$TARGET_ENV" = "staging" ]; then
+  compose_files+=(-f "$PROJECT_DIR/docker-compose.staging.yml")
+fi
+
 compose() {
   docker compose --env-file "$ENV_FILE" \
     -p "$project_name" \
-    -f "$PROJECT_DIR/docker-compose.yml" \
-    -f "$PROJECT_DIR/docker-compose.prod.yml" "$@"
+    "${compose_files[@]}" "$@"
 }
 
 echo "Validating compose config..."
@@ -151,6 +168,7 @@ if [ "$ready" != "true" ]; then
 fi
 
 echo "Running smoke checks..."
+export TRANXIT_SMOKE_DOCKER_NETWORK="${TRANXIT_SMOKE_DOCKER_NETWORK:-${project_name}_backend}"
 "$SCRIPT_DIR/smoke.sh" --base-url "$base_url"
 
 marker_dir="${TRANXIT_MARKER_DIR:-/opt/tranxit}"
