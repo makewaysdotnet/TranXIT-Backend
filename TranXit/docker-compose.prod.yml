@@ -1,0 +1,220 @@
+networks:
+  backend:
+    internal: true
+  edge:
+    driver: bridge
+
+volumes:
+  tranxit-sql-data:
+  tranxit-rabbitmq-data:
+  tranxit-backups:
+  caddy-data:
+  caddy-config:
+
+services:
+  caddy:
+    image: tranxit-caddy:${TRANXIT_IMAGE_TAG:?Set TRANXIT_IMAGE_TAG}
+    build:
+      context: .
+      dockerfile: ops/caddy/Dockerfile
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN}
+      STAGING_DOMAIN: ${STAGING_DOMAIN:?Set STAGING_DOMAIN}
+      CADDY_ACME_EMAIL: ${CADDY_ACME_EMAIL:?Set CADDY_ACME_EMAIL}
+      AUTH_RATE_LIMIT_EVENTS: ${AUTH_RATE_LIMIT_EVENTS:?Set AUTH_RATE_LIMIT_EVENTS}
+      AUTH_RATE_LIMIT_WINDOW: ${AUTH_RATE_LIMIT_WINDOW:?Set AUTH_RATE_LIMIT_WINDOW}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./ops/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - edge
+      - backend
+    depends_on:
+      frontend:
+        condition: service_healthy
+      ocelotapigw:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "caddy", "validate", "--config", "/etc/caddy/Caddyfile"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    image: tranxit-frontend:${TRANXIT_IMAGE_TAG:?Set TRANXIT_IMAGE_TAG}
+    build:
+      context: ${TRANXIT_FRONTEND_BUILD_CONTEXT:?Set TRANXIT_FRONTEND_BUILD_CONTEXT}
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_TRANXIT_API_URL: ${NEXT_PUBLIC_TRANXIT_API_URL:?Set NEXT_PUBLIC_TRANXIT_API_URL}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      TRANXIT_DEPLOY_ENV: ${TRANXIT_DEPLOY_ENV:?Set TRANXIT_DEPLOY_ENV}
+      NEXT_PUBLIC_TRANXIT_API_URL: ${NEXT_PUBLIC_TRANXIT_API_URL:?Set NEXT_PUBLIC_TRANXIT_API_URL}
+      TRANXIT_API_URL: ${TRANXIT_INTERNAL_API_URL:?Set TRANXIT_INTERNAL_API_URL}
+      TRANXIT_ENABLE_DEMO_AUTH: "false"
+      TRANXIT_E2E_EXPOSE_DEV_CODE: "false"
+    networks:
+      - backend
+    depends_on:
+      ocelotapigw:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000 >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  ocelotapigw:
+    image: tranxit-api-gateway:${TRANXIT_IMAGE_TAG:?Set TRANXIT_IMAGE_TAG}
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: 8080
+      AllowedOrigins__0: ${PUBLIC_APP_URL:?Set PUBLIC_APP_URL}
+      AllowedOrigins__1: ${STAGING_APP_URL:?Set STAGING_APP_URL}
+      Jwt__Issuer: ${JWT_ISSUER:?Set JWT_ISSUER}
+      Jwt__Audience: ${JWT_AUDIENCE:?Set JWT_AUDIENCE}
+      Jwt__RequireHttpsMetadata: "true"
+      SharedJwtSecrets__Key: ${JWT_SECRET:?Set JWT_SECRET}
+    ports: !reset []
+    networks:
+      - backend
+    depends_on:
+      accountservice:
+        condition: service_healthy
+      courierjobservice:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health >/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  accountservice:
+    image: tranxit-account-service:${TRANXIT_IMAGE_TAG:?Set TRANXIT_IMAGE_TAG}
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: 8080
+      AllowedOrigins__0: ${PUBLIC_APP_URL:?Set PUBLIC_APP_URL}
+      AllowedOrigins__1: ${STAGING_APP_URL:?Set STAGING_APP_URL}
+      ConnectionStrings__Database: Server=sqlserver,1433;Database=Tranxit_Account;User Id=sa;Password=${SQL_SA_PASSWORD:?Set SQL_SA_PASSWORD};TrustServerCertificate=True;Encrypt=True
+      RabbitMQ__HostName: rabbitmq
+      RabbitMQ__UserName: ${RABBITMQ_USER:?Set RABBITMQ_USER}
+      RabbitMQ__Password: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}
+      Jwt__Issuer: ${JWT_ISSUER:?Set JWT_ISSUER}
+      Jwt__Audience: ${JWT_AUDIENCE:?Set JWT_AUDIENCE}
+      Jwt__ExpiryMinutes: ${JWT_EXPIRY_MINUTES:?Set JWT_EXPIRY_MINUTES}
+      Jwt__RefreshExpiryDays: ${JWT_REFRESH_EXPIRY_DAYS:?Set JWT_REFRESH_EXPIRY_DAYS}
+      Jwt__RequireHttpsMetadata: "true"
+      SharedJwtSecrets__Key: ${JWT_SECRET:?Set JWT_SECRET}
+      MailSettings__DisableSending: "false"
+      MailSettings__Server: ${SMTP_HOST:?Set SMTP_HOST}
+      MailSettings__Port: ${SMTP_PORT:?Set SMTP_PORT}
+      MailSettings__SenderName: ${MAIL_SENDER_NAME:?Set MAIL_SENDER_NAME}
+      MailSettings__SenderEmail: ${MAIL_FROM:?Set MAIL_FROM}
+      MailSettings__UserName: ${SMTP_USER:?Set SMTP_USER}
+      MailSettings__Password: ${SMTP_PASSWORD:?Set SMTP_PASSWORD}
+    ports: !reset []
+    networks:
+      - backend
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health >/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  courierjobservice:
+    image: tranxit-courierjob-service:${TRANXIT_IMAGE_TAG:?Set TRANXIT_IMAGE_TAG}
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: 8080
+      AllowedOrigins__0: ${PUBLIC_APP_URL:?Set PUBLIC_APP_URL}
+      AllowedOrigins__1: ${STAGING_APP_URL:?Set STAGING_APP_URL}
+      ConnectionStrings__Database: Server=sqlserver,1433;Database=Tranxit_CourierJob;User Id=sa;Password=${SQL_SA_PASSWORD:?Set SQL_SA_PASSWORD};TrustServerCertificate=True;Encrypt=True
+      RabbitMQ__HostName: rabbitmq
+      RabbitMQ__UserName: ${RABBITMQ_USER:?Set RABBITMQ_USER}
+      RabbitMQ__Password: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}
+      Jwt__Issuer: ${JWT_ISSUER:?Set JWT_ISSUER}
+      Jwt__Audience: ${JWT_AUDIENCE:?Set JWT_AUDIENCE}
+      Jwt__ExpiryMinutes: ${JWT_EXPIRY_MINUTES:?Set JWT_EXPIRY_MINUTES}
+      Jwt__RequireHttpsMetadata: "true"
+      SharedJwtSecrets__Key: ${JWT_SECRET:?Set JWT_SECRET}
+      MailSettings__DisableSending: "false"
+      MailSettings__Server: ${SMTP_HOST:?Set SMTP_HOST}
+      MailSettings__Port: ${SMTP_PORT:?Set SMTP_PORT}
+      MailSettings__SenderName: ${MAIL_SENDER_NAME:?Set MAIL_SENDER_NAME}
+      MailSettings__SenderEmail: ${MAIL_FROM:?Set MAIL_FROM}
+      MailSettings__UserName: ${SMTP_USER:?Set SMTP_USER}
+      MailSettings__Password: ${SMTP_PASSWORD:?Set SMTP_PASSWORD}
+    ports: !reset []
+    networks:
+      - backend
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health >/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  sqlserver:
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${SQL_SA_PASSWORD:?Set SQL_SA_PASSWORD}
+      MSSQL_PID: Express
+    ports: !reset []
+    volumes:
+      - tranxit-sql-data:/var/opt/mssql
+      - tranxit-backups:/var/opt/mssql/backup
+    networks:
+      - backend
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "(/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -Q \"SELECT 1\" || /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -Q \"SELECT 1\")"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  rabbitmq:
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?Set RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}
+    ports: !reset []
+    volumes:
+      - tranxit-rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s

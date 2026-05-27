@@ -1,0 +1,119 @@
+name: Deploy TranXIT
+run-name: Deploy ${{ inputs.environment }} backend ${{ inputs.sha }} frontend ${{ inputs.frontend_ref }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      sha:
+        description: Backend commit SHA to deploy
+        required: true
+        type: string
+      frontend_ref:
+        description: Frontend branch, tag, or SHA to deploy
+        required: false
+        default: main
+        type: string
+
+jobs:
+  deploy:
+    name: deploy-${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Validate inputs
+        run: |
+          if [ "${{ inputs.environment }}" = "production" ]; then
+            {
+              echo "## Production approval gate"
+              echo
+              echo "This job uses the GitHub Actions \`production\` environment. Configure that environment"
+              echo "with a required reviewer before running production deploys. The approval prompt shows:"
+              echo
+              echo "- Backend SHA: \`${{ inputs.sha }}\`"
+              echo "- Frontend ref: \`${{ inputs.frontend_ref }}\`"
+              echo
+              echo "The reviewer must confirm the same backend SHA and frontend ref were deployed and smoked"
+              echo "successfully on staging before approving this production job."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Install SSH key
+        env:
+          DEPLOY_KEY: ${{ secrets.TRANXIT_DEPLOY_SSH_KEY }}
+        run: |
+          if [ -z "$DEPLOY_KEY" ]; then
+            echo "::error::Missing TRANXIT_DEPLOY_SSH_KEY secret"
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/tranxit_deploy_key
+          chmod 600 ~/.ssh/tranxit_deploy_key
+
+      - name: Resolve deploy host
+        id: host
+        env:
+          TARGET_ENV: ${{ inputs.environment }}
+          STAGING_HOST: ${{ secrets.TRANXIT_STAGING_HOST }}
+          PRODUCTION_HOST: ${{ secrets.TRANXIT_PRODUCTION_HOST }}
+          DEPLOY_USER: ${{ secrets.TRANXIT_DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.TRANXIT_DEPLOY_PORT }}
+        run: |
+          if [ -z "$DEPLOY_USER" ]; then
+            echo "::error::Missing TRANXIT_DEPLOY_USER secret"
+            exit 1
+          fi
+
+          if [ "$TARGET_ENV" = "staging" ]; then
+            host="$STAGING_HOST"
+          else
+            host="$PRODUCTION_HOST"
+          fi
+
+          if [ -z "$host" ]; then
+            echo "::error::Missing deploy host secret for $TARGET_ENV"
+            exit 1
+          fi
+
+          echo "host=$host" >> "$GITHUB_OUTPUT"
+          echo "user=$DEPLOY_USER" >> "$GITHUB_OUTPUT"
+          echo "port=${DEPLOY_PORT:-22}" >> "$GITHUB_OUTPUT"
+
+      - name: Trust deploy host
+        run: |
+          ssh-keyscan -p "${{ steps.host.outputs.port }}" -H "${{ steps.host.outputs.host }}" >> ~/.ssh/known_hosts
+
+      - name: Run remote deploy
+        id: deploy
+        run: |
+          set -o pipefail
+          ssh -i ~/.ssh/tranxit_deploy_key \
+            -p "${{ steps.host.outputs.port }}" \
+            "${{ steps.host.outputs.user }}@${{ steps.host.outputs.host }}" \
+            "cd /opt/tranxit/backend/TranXit && ./scripts/deploy.sh --env '${{ inputs.environment }}' --sha '${{ inputs.sha }}' --frontend-ref '${{ inputs.frontend_ref }}'" \
+            2>&1 | tee deploy-output.log
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## TranXIT deploy"
+            echo
+            echo "- Environment: \`${{ inputs.environment }}\`"
+            echo "- Backend SHA: \`${{ inputs.sha }}\`"
+            echo "- Frontend ref: \`${{ inputs.frontend_ref }}\`"
+            echo "- Result: \`${{ job.status }}\`"
+            echo
+            echo "### Deploy output"
+            echo
+            echo '```text'
+            tail -n 120 deploy-output.log 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
