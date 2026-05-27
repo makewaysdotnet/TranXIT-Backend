@@ -1,0 +1,61 @@
+{
+	email {$CADDY_ACME_EMAIL}
+	admin off
+}
+
+(security_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
+
+(auth_api_rate_limit) {
+	rate_limit {
+		zone auth_api {
+			match {
+				method POST
+				path /api/login /api/login/google /api/register /api/send-code /api/reset-password
+			}
+			key {remote_host}
+			events {$AUTH_RATE_LIMIT_EVENTS}
+			window {$AUTH_RATE_LIMIT_WINDOW}
+			ipv6_prefix 64
+		}
+		log_key
+	}
+}
+
+(tranxit_site) {
+	import security_headers
+	encode zstd gzip
+
+	log {
+		output stdout
+		format json
+	}
+
+	handle /api/auth/* {
+		reverse_proxy frontend:3000
+	}
+
+	handle /api/* {
+		import auth_api_rate_limit
+		reverse_proxy ocelotapigw:8080
+	}
+
+	handle {
+		reverse_proxy frontend:3000
+	}
+}
+
+{$DOMAIN} {
+	import tranxit_site
+}
+
+{$STAGING_DOMAIN} {
+	import tranxit_site
+}

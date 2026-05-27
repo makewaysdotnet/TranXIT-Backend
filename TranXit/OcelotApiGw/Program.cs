@@ -10,6 +10,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddJwtAuthentication(builder.Configuration);
 builder.Services.AddAuthorization();
+builder.Services.AddHealthChecks();
 
 builder.Configuration
 	.SetBasePath(builder.Environment.ContentRootPath)
@@ -39,5 +40,6 @@ app.UseCors(options =>
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.MapHealthChecks("/health");
 await app.UseOcelot();
 app.Run();

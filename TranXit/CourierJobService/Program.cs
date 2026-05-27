@@ -56,6 +56,7 @@ builder.Services.AddValidatorsFromAssembly(assembly);
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddHealthChecks();
 
 //builder.Services.AddMassTransit(busConfigurator =>
 //{
@@ -96,11 +97,17 @@ builder.Services.AddMassTransit(busConfigurator =>
 builder.Services.AddCors();
 
 var app = builder.Build();
+var applyMigrationsOnly = args.Contains("--apply-migrations", StringComparer.OrdinalIgnoreCase);
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsEnvironment("Testing"))
 {
 	await CourierJobDatabaseMigrator.MigrateAsync(app.Services);
+}
+
+if (applyMigrationsOnly)
+{
+	return;
 }
 
 if (app.Environment.IsDevelopment())
@@ -130,5 +137,6 @@ app.UseAuthorization();
 app.MapCarter();
 app.UseExceptionHandler();
 app.MapHealthChecks("/courierjobservice");
+app.MapHealthChecks("/health");
 
 app.Run();
