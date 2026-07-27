@@ -41,6 +41,24 @@ public sealed class AccessControlRegressionTests(SqlContainerFixture fixture) : 
 		response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
 	}
 
+	[Fact(DisplayName = "T-NFR-3.UploadDocumentCrossUser403")]
+	public async Task UploadDocumentCrossUser403()
+	{
+		// UC-NFR-3
+		AccountClient.AuthenticateAs(Tokens.ForUser(1, "Customer"));
+		using var form = new MultipartFormDataContent
+		{
+			{ new StringContent("2"), "UserId" }
+		};
+		var file = new ByteArrayContent([0x25, 0x50, 0x44, 0x46]);
+		file.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
+		form.Add(file, "Files", "identity.pdf");
+
+		var response = await AccountClient.PostAsync("/api/upload/document", form);
+
+		response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+	}
+
 	private static MultipartFormDataContent ImageForm(string idName, string idValue)
 	{
 		var form = new MultipartFormDataContent

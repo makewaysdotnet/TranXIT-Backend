@@ -106,6 +106,20 @@ public class CreateBid
 				charge.RuleFor(c => c.Description)
 					.MaximumLength(100).WithMessage("Charge description cannot exceed 100 characters");
 			});
+			RuleForEach(c => c.BidProposals).ChildRules(proposal =>
+			{
+				proposal.RuleFor(c => c.DeliveryTypeId)
+					.NotNull().WithMessage("Delivery type is required")
+					.GreaterThan(0).WithMessage("Delivery type is invalid");
+				proposal.RuleFor(c => c.DeliveryDate)
+					.NotNull().WithMessage("Delivery date is required");
+				proposal.RuleForEach(c => c.BidProposalItems).ChildRules(item =>
+				{
+					item.RuleFor(c => c.JobItemId)
+						.NotNull().WithMessage("Job item is required")
+						.GreaterThan(0).WithMessage("Job item is invalid");
+				});
+			});
 		}
 	}
 	internal sealed class Handler(CourierJobDbContext jobDbContext,
@@ -128,34 +142,45 @@ public class CreateBid
 				return new Error("Job not found");
 			}
 
-			var remainingTime = JobsHelper.GetJobRemainingTime(job.ExpiryDateUtc, DateTime.UtcNow);
-
-			if (remainingTime is 0)
+			var now = DateTime.UtcNow;
+			if (!JobAccess.IsMarketplaceOpen(job, now))
 			{
-				return new Error("Job Expired");
+				return new Error("Job is not open for bidding");
 			}
 
-			if (remainingTime > 0 && (job.JobStatusId is null || job.JobStatusId == (int)JobStatusEnum.Open))
-			{
-				job.JobStatusId = (int)JobStatusEnum.Bidding;
-				jobDbContext.Jobs.Update(job);
-				await jobDbContext.SaveChangesAsync();
-			}
-
-			// create new bid
 			request.UserId = HttpContextUser.GetCurrentUserId(httpContext);
-			var createdBid = await jobDbContext.Biddings
-				.Include(x => x.BiddingCharges)
-				.Include(x => x.BiddingProposals)
-					.ThenInclude(y => y.BiddingProposalItems)
-				.AsSplitQuery()
-				.FirstOrDefaultAsync(x => x.JobId == request.JobId && x.UserId == request.UserId,
-				cancellationToken);
-			if (createdBid is not null)
+			var bidExists = await jobDbContext.Biddings
+				.AnyAsync(
+					bid => bid.JobId == request.JobId && bid.UserId == request.UserId,
+					cancellationToken);
+			if (bidExists)
 			{
 				return new Error("Bid already exists");
 			}
-			createdBid = new Bidding
+
+			var proposalItemIds = request.BidProposals
+				.SelectMany(proposal => proposal.BidProposalItems)
+				.Select(item => item.JobItemId!.Value)
+				.Distinct()
+				.ToArray();
+			if (proposalItemIds.Length > 0)
+			{
+				var validItemCount = await jobDbContext.JobItems.CountAsync(
+					item => item.JobId == request.JobId && proposalItemIds.Contains(item.Id),
+					cancellationToken);
+				if (validItemCount != proposalItemIds.Length)
+				{
+					return new Error("One or more job items do not belong to this job");
+				}
+			}
+
+			if (job.JobStatusId == (int)JobStatusEnum.Open)
+			{
+				job.JobStatusId = (int)JobStatusEnum.Bidding;
+				jobDbContext.Jobs.Update(job);
+			}
+
+			var createdBid = new Bidding
 			{
 				JobId = request.JobId,
 				UserId = request.UserId,
@@ -186,8 +211,8 @@ public class CreateBid
 				}).ToList()
 			};
 
-			await jobDbContext.Biddings.AddAsync(createdBid);
-			await jobDbContext.SaveChangesAsync();
+			await jobDbContext.Biddings.AddAsync(createdBid, cancellationToken);
+			await jobDbContext.SaveChangesAsync(cancellationToken);
 			return new CreateUpdateBidResult { BidId = createdBid.Id };
 		}
 	}

@@ -135,9 +135,18 @@ app.UseCors(options =>
 app.UseAuthentication();
 app.UseAuthorization();
 //app.UseAntiforgery();
+if (app.Environment.IsEnvironment("Testing"))
+{
+	app.MapGet(
+		"/api/test/error",
+		ThrowSensitiveTestException);
+}
 app.MapCarter();
 app.UseExceptionHandler();
 app.MapHealthChecks("/courierjobservice");
 app.MapHealthChecks("/health");
 
 app.Run();
+
+static IResult ThrowSensitiveTestException()
+	=> throw new InvalidOperationException("Sensitive test exception");

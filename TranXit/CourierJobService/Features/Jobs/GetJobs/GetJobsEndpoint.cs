@@ -52,6 +52,7 @@ public class GetJob
 		{
 			var currentTime = DateTime.UtcNow;
 			var jobsQuery = jobDbContext.Jobs
+				.Where(JobAccess.VisibleToCourier(request.UserId, currentTime))
 				.OrderByDescending(x => x.CreatedOnUtc)
 				.Include(x => x.OriginCountry)
 				.Include(x => x.OriginCity)
@@ -63,10 +64,6 @@ public class GetJob
 				.AsNoTracking()
 				.Select(x => MapToJobResult(x, request.UserId, currentTime));
 
-			if (jobsQuery is null)
-			{
-				return new Error("Jobs not found");
-			}
 			var paginatedResponse = await Pagination<JobResult>
 				.CreateAsync(jobsQuery, request.Page, request.PageSize);
 			return paginatedResponse;

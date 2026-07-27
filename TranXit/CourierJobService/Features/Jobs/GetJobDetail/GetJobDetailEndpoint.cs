@@ -56,7 +56,25 @@ public class GetJobDetail
 		public async Task<Result<JobDetailResult>> Handle(Query request,
 			CancellationToken cancellationToken)
 		{
-			var jobDetail = await jobDbContext.Jobs
+			var currentUserRole = HttpContextUser.GetCurrentUserRole(httpContext);
+			var currentUserId = HttpContextUser.GetCurrentUserId(httpContext);
+			var jobQuery = jobDbContext.Jobs
+				.Where(job => job.Id == request.jobId);
+
+			if (string.Equals(currentUserRole, "Customer", StringComparison.OrdinalIgnoreCase))
+			{
+				jobQuery = jobQuery.Where(job => job.UserId == currentUserId);
+			}
+			else if (string.Equals(currentUserRole, "Courier", StringComparison.OrdinalIgnoreCase))
+			{
+				jobQuery = jobQuery.Where(JobAccess.VisibleToCourier(currentUserId, DateTime.UtcNow));
+			}
+			else
+			{
+				return new Error(ForbiddenError);
+			}
+
+			var jobDetail = await jobQuery
 				.Include(x => x.OriginCountry)
 				.Include(x => x.OriginCity)
 				.Include(x => x.DestinationCountry)
@@ -72,14 +90,11 @@ public class GetJobDetail
 
 			if (jobDetail is null)
 			{
+				if (await jobDbContext.Jobs.AnyAsync(job => job.Id == request.jobId, cancellationToken))
+				{
+					return new Error(ForbiddenError);
+				}
 				return new Error("Job Detail not found");
-			}
-			var currentUserRole = HttpContextUser.GetCurrentUserRole(httpContext);
-			var currentUserId = HttpContextUser.GetCurrentUserId(httpContext);
-
-			if (currentUserRole == "Customer" && jobDetail.UserId != currentUserId)
-			{
-				return new Error(ForbiddenError);
 			}
 
 			var jobDetaliResult = new JobDetailResult
@@ -117,7 +132,7 @@ public class GetJobDetail
 				})
 			};
 
-			if (currentUserRole == "Customer")
+			if (string.Equals(currentUserRole, "Customer", StringComparison.OrdinalIgnoreCase))
 			{
 				jobDetaliResult.CustomerName = httpContext.HttpContext?.User.FindFirstValue(ClaimTypes.GivenName) ?? string.Empty;
 				return jobDetaliResult;
