@@ -147,6 +147,11 @@ compose run --rm --no-deps courierjobservice dotnet CourierJobService.dll --appl
 echo "Starting TranXIT stack..."
 compose up -d
 
+echo "Verifying production network isolation and egress..."
+"$SCRIPT_DIR/verify-production-topology.sh" \
+  --project-name "$project_name" \
+  --egress-url "${TRANXIT_EGRESS_PROBE_URL:?Set TRANXIT_EGRESS_PROBE_URL}"
+
 base_url="${PUBLIC_APP_URL:?Set PUBLIC_APP_URL}"
 if [ "$TARGET_ENV" = "staging" ]; then
   base_url="${STAGING_APP_URL:?Set STAGING_APP_URL}"

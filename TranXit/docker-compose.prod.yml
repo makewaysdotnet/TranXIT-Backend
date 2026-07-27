@@ -1,6 +1,9 @@
 networks:
   backend:
     internal: true
+  egress:
+    driver: bridge
+    internal: false
   edge:
     driver: bridge
 
@@ -129,6 +132,7 @@ services:
     ports: !reset []
     networks:
       - backend
+      - egress
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -168,6 +172,7 @@ services:
     ports: !reset []
     networks:
       - backend
+      - egress
     depends_on:
       sqlserver:
         condition: service_healthy
