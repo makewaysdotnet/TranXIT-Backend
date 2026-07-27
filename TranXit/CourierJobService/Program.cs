@@ -74,7 +74,8 @@ builder.Services.AddHealthChecks();
 builder.Services.AddMassTransit(busConfigurator =>
 {
 	busConfigurator.SetKebabCaseEndpointNameFormatter();
-	if (builder.Environment.IsEnvironment("Testing"))
+	if (builder.Environment.IsEnvironment("Testing") ||
+		builder.Configuration.GetValue<bool>("TestInfrastructure:UseInMemoryBus"))
 	{
 		busConfigurator.UsingInMemory((context, configurator) =>
 		{

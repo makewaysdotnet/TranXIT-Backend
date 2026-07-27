@@ -27,9 +27,13 @@ public partial class AccountDbContext : DbContext
 	{
 		modelBuilder.Entity<Role>(entity =>
 		{
+			entity.HasIndex(e => e.Name, "UX_Roles_Name").IsUnique();
+
 			entity.Property(e => e.Name)
 				.HasMaxLength(50)
 				.IsUnicode(false);
+
+			entity.HasData(AccountReferenceData.CreateRoles());
 		});
 
 		modelBuilder.Entity<RefreshToken>(entity =>
@@ -47,6 +51,10 @@ public partial class AccountDbContext : DbContext
 
 		modelBuilder.Entity<User>(entity =>
 		{
+			entity.HasIndex(e => e.RoleId, "UX_Users_SingleAdmin")
+				.HasFilter($"[RoleId] = {AccountReferenceData.AdminRoleId}")
+				.IsUnique();
+
 			entity.Property(e => e.CodeSentAtUtc).HasColumnType("datetime");
 			entity.Property(e => e.Email).HasMaxLength(256);
 			entity.Property(e => e.Phone).HasMaxLength(50);

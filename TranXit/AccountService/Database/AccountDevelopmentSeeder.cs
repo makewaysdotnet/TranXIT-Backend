@@ -14,11 +14,6 @@ public static class AccountDevelopmentSeeder
 		using var scope = services.CreateScope();
 		var db = scope.ServiceProvider.GetRequiredService<AccountDbContext>();
 
-		await EnsureRoleAsync(db, "Customer");
-		await EnsureRoleAsync(db, "Courier");
-		await EnsureRoleAsync(db, "Agent");
-		await EnsureRoleAsync(db, "Admin");
-
 		var customerRole = await db.Roles.SingleAsync(r => r.Name == "Customer");
 		var courierRole = await db.Roles.SingleAsync(r => r.Name == "Courier");
 		var adminRole = await db.Roles.SingleAsync(r => r.Name == "Admin");
@@ -63,15 +58,6 @@ public static class AccountDevelopmentSeeder
 		}
 
 		await db.SaveChangesAsync();
-	}
-
-	private static async Task EnsureRoleAsync(AccountDbContext db, string roleName)
-	{
-		if (!await db.Roles.AnyAsync(role => role.Name == roleName))
-		{
-			db.Roles.Add(new Role { Name = roleName });
-			await db.SaveChangesAsync();
-		}
 	}
 
 }

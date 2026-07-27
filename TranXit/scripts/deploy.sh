@@ -138,6 +138,9 @@ compose up -d sqlserver rabbitmq
 echo "Applying AccountService migrations..."
 compose run --rm --no-deps accountservice dotnet AccountService.dll --apply-migrations
 
+echo "Bootstrapping the single Admin account..."
+compose run --rm --no-deps accountservice dotnet AccountService.dll --bootstrap-admin
+
 echo "Applying CourierJobService migrations..."
 compose run --rm --no-deps courierjobservice dotnet CourierJobService.dll --apply-migrations
 

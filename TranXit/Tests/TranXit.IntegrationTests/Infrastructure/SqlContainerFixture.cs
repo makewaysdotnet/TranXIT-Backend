@@ -5,6 +5,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using DotNet.Testcontainers.Images;
 using Respawn;
+using Respawn.Graph;
 using Testcontainers.MsSql;
 
 using AccountDbContext = AccountService::AccountService.Database.AccountDbContext;
@@ -36,8 +37,20 @@ public sealed class SqlContainerFixture : IAsyncLifetime
 		CourierJobConnectionString = BuildConnectionString(CourierJobDatabase);
 
 		await EnsureSchemasAsync();
-		_accountRespawner = await CreateRespawnerAsync(AccountConnectionString);
-		_courierJobRespawner = await CreateRespawnerAsync(CourierJobConnectionString);
+		_accountRespawner = await CreateRespawnerAsync(
+			AccountConnectionString,
+			new Table("__EFMigrationsHistory"),
+			new Table("Roles"));
+		_courierJobRespawner = await CreateRespawnerAsync(
+			CourierJobConnectionString,
+			new Table("__EFMigrationsHistory"),
+			new Table("JobStatuses"),
+			new Table("CourierModes"),
+			new Table("CargoModes"),
+			new Table("ItemTypes"),
+			new Table("DeliveryTypes"),
+			new Table("Countries"),
+			new Table("Cities"));
 		await ResetAsync();
 	}
 
@@ -100,23 +113,26 @@ public sealed class SqlContainerFixture : IAsyncLifetime
 	{
 		await using (var accountDb = CreateAccountDbContext())
 		{
-			await accountDb.Database.EnsureCreatedAsync();
+			await accountDb.Database.MigrateAsync();
 		}
 
 		await using (var courierJobDb = CreateCourierJobDbContext())
 		{
-			await courierJobDb.Database.EnsureCreatedAsync();
+			await courierJobDb.Database.MigrateAsync();
 		}
 	}
 
-	private async Task<Respawner> CreateRespawnerAsync(string connectionString)
+	private async Task<Respawner> CreateRespawnerAsync(
+		string connectionString,
+		params Table[] tablesToIgnore)
 	{
 		await using var connection = new SqlConnection(connectionString);
 		await connection.OpenAsync();
 		return await Respawner.CreateAsync(connection, new RespawnerOptions
 		{
 			DbAdapter = DbAdapter.SqlServer,
-			SchemasToInclude = ["dbo"]
+			SchemasToInclude = ["dbo"],
+			TablesToIgnore = tablesToIgnore
 		});
 	}
 

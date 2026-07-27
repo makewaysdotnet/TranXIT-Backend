@@ -29,14 +29,16 @@ internal static class TestConfiguration
 			["RabbitMQ:Password"] = "unused-in-testing"
 		};
 
-	public static void ApplyToProcessEnvironment(string connectionString)
+	public static void ApplyToProcessEnvironment(
+		string connectionString,
+		string environmentName = "Testing")
 	{
 		foreach (var (key, value) in ForService(connectionString))
 		{
 			Environment.SetEnvironmentVariable(key.Replace(':', '_').Replace("_", "__"), value);
 		}
 
-		Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Testing");
+		Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", environmentName);
 		Environment.SetEnvironmentVariable("ConnectionStrings__Database", connectionString);
 		Environment.SetEnvironmentVariable("AllowedOrigins__0", "http://localhost:3000");
 		Environment.SetEnvironmentVariable("Jwt__Issuer", Issuer);

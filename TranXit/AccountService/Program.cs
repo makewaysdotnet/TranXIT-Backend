@@ -93,7 +93,8 @@ builder.Services.AddMassTransit(busConfigurator =>
 	busConfigurator.AddSagaStateMachines(assembly);
 	busConfigurator.AddSagas(assembly);
 	busConfigurator.AddActivities(assembly);
-	if (builder.Environment.IsEnvironment("Testing"))
+	if (builder.Environment.IsEnvironment("Testing") ||
+		builder.Configuration.GetValue<bool>("TestInfrastructure:UseInMemoryBus"))
 	{
 		busConfigurator.UsingInMemory((context, configurator) =>
 		{
@@ -117,6 +118,7 @@ builder.Services.AddCors();
 
 var app = builder.Build();
 var applyMigrationsOnly = args.Contains("--apply-migrations", StringComparer.OrdinalIgnoreCase);
+var bootstrapAdminOnly = args.Contains("--bootstrap-admin", StringComparer.OrdinalIgnoreCase);
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsEnvironment("Testing"))
@@ -126,6 +128,14 @@ if (!app.Environment.IsEnvironment("Testing"))
 
 if (applyMigrationsOnly)
 {
+	return;
+}
+
+if (bootstrapAdminOnly)
+{
+	await AccountProductionAdminBootstrapper.BootstrapAsync(
+		app.Services,
+		builder.Configuration);
 	return;
 }
 
