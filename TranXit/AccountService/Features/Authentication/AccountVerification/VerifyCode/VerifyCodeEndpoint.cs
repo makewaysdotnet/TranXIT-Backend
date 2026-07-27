@@ -67,7 +67,9 @@ public class VerifyCode
 			}
 			var user = await accountDbContext
 				.Users
-				.FirstOrDefaultAsync(x => x.Email == request.Email, cancellationToken);
+				.FirstOrDefaultAsync(
+					x => x.NormalizedEmail == EmailIdentity.Normalize(request.Email),
+					cancellationToken);
 			if (user is null)
 			{
 				return new Error("User doesn't exist");

@@ -64,7 +64,9 @@ public class SendCode
 			}
 			var user = await accountDbContext
 				.Users
-				.FirstOrDefaultAsync(x => x.Email == request.Email);
+				.FirstOrDefaultAsync(
+					x => x.NormalizedEmail == EmailIdentity.Normalize(request.Email),
+					cancellationToken);
 			if (user is null)
 			{
 				return new Error("User doesn't exist");

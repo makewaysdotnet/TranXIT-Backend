@@ -106,6 +106,21 @@
       ]
     },
     {
+      "DownstreamPathTemplate": "/api/logout",
+      "DownstreamSchema": "http",
+      "RouteIsCaseSensitive": false,
+      "DownstreamHostAndPorts": [
+        {
+          "Port": 8080,
+          "Host": "accountservice"
+        }
+      ],
+      "UpstreamPathTemplate": "/api/logout",
+      "UpstreamHttpMethod": [
+        "POST"
+      ]
+    },
+    {
       "DownstreamPathTemplate": "/api/jobs",
       "DownstreamSchema": "http",
       "RouteIsCaseSensitive": false,

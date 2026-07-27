@@ -38,9 +38,15 @@ public partial class AccountDbContext : DbContext
 
 		modelBuilder.Entity<RefreshToken>(entity =>
 		{
+			entity.HasIndex(e => e.FamilyId, "IX_RefreshTokens_FamilyId");
+			entity.HasIndex(e => e.ParentTokenId, "UX_RefreshTokens_ParentTokenId")
+				.HasFilter("[ParentTokenId] IS NOT NULL")
+				.IsUnique();
+
 			entity.Property(e => e.CreatedAtUtc).HasColumnType("datetime");
 			entity.Property(e => e.ExpiresAtUtc).HasColumnType("datetime");
 			entity.Property(e => e.RevokedAtUtc).HasColumnType("datetime");
+			entity.Property(e => e.RevokedReason).HasMaxLength(100);
 			entity.Property(e => e.TokenHash).HasMaxLength(200);
 
 			entity.HasOne(d => d.User).WithMany(p => p.RefreshTokens)
@@ -51,12 +57,15 @@ public partial class AccountDbContext : DbContext
 
 		modelBuilder.Entity<User>(entity =>
 		{
+			entity.HasIndex(e => e.NormalizedEmail, "UX_Users_NormalizedEmail")
+				.IsUnique();
 			entity.HasIndex(e => e.RoleId, "UX_Users_SingleAdmin")
 				.HasFilter($"[RoleId] = {AccountReferenceData.AdminRoleId}")
 				.IsUnique();
 
 			entity.Property(e => e.CodeSentAtUtc).HasColumnType("datetime");
 			entity.Property(e => e.Email).HasMaxLength(256);
+			entity.Property(e => e.NormalizedEmail).HasMaxLength(256);
 			entity.Property(e => e.Phone).HasMaxLength(50);
 			entity.Property(e => e.Provider).HasMaxLength(100);
 			entity.Property(e => e.Username).HasMaxLength(256);
@@ -91,6 +100,30 @@ public partial class AccountDbContext : DbContext
 		});
 
 		OnModelCreatingPartial(modelBuilder);
+	}
+
+	public override int SaveChanges(bool acceptAllChangesOnSuccess)
+	{
+		NormalizeTrackedUserEmails();
+		return base.SaveChanges(acceptAllChangesOnSuccess);
+	}
+
+	public override Task<int> SaveChangesAsync(
+		bool acceptAllChangesOnSuccess,
+		CancellationToken cancellationToken = default)
+	{
+		NormalizeTrackedUserEmails();
+		return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+	}
+
+	private void NormalizeTrackedUserEmails()
+	{
+		foreach (var entry in ChangeTracker.Entries<User>()
+			.Where(entry => entry.State is EntityState.Added or EntityState.Modified))
+		{
+			entry.Entity.Email = entry.Entity.Email.Trim();
+			entry.Entity.NormalizedEmail = EmailIdentity.Normalize(entry.Entity.Email);
+		}
 	}
 
 	partial void OnModelCreatingPartial(ModelBuilder modelBuilder);

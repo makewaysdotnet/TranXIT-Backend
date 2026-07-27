@@ -56,6 +56,10 @@ public static class RefreshAccessToken
 			}
 
 			var user = issue.User;
+			if (user.IsEmailVerified is not true)
+			{
+				return new Error("Refresh token is invalid or expired");
+			}
 			var tokenBuilderRequest = new TokenBuilderRequest
 			{
 				Email = user.Email,

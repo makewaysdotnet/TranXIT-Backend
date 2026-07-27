@@ -79,17 +79,21 @@ expect_code "protected jobs route without token" "401" "$protected_code"
 if [ -n "${SMOKE_LOGIN_EMAIL:-}" ] && [ -n "${SMOKE_LOGIN_PASSWORD:-}" ]; then
   login_email="$SMOKE_LOGIN_EMAIL"
   login_password="$SMOKE_LOGIN_PASSWORD"
+  login_expected="200"
+  login_description="verified Customer login"
 else
   login_email="smoke.customer.$(date +%s).$RANDOM@tranxit.local"
   login_password="Password1!"
   customer_body="{\"username\":\"Smoke Customer\",\"email\":\"$login_email\",\"phone\":\"+920000000001\",\"role\":\"Customer\",\"password\":\"$login_password\",\"confirmPassword\":\"$login_password\"}"
   customer_code="$(request_code POST /api/register "$customer_body")"
   expect_code "temporary Customer self-register" "200" "$customer_code"
+  login_expected="400"
+  login_description="unverified Customer login is blocked"
 fi
 
 login_body="{\"email\":\"$login_email\",\"password\":\"$login_password\"}"
 login_code="$(request_code POST /api/login "$login_body")"
-expect_code "Customer login" "200" "$login_code"
+expect_code "$login_description" "$login_expected" "$login_code"
 
 if [ -n "${TRANXIT_E2E_MAIL_INBOX:-}" ]; then
   if [ -z "${TRANXIT_SMOKE_DOCKER_NETWORK:-}" ]; then

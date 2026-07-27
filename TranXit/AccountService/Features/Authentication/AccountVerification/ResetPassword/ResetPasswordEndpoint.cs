@@ -74,7 +74,8 @@ public class ResetPassword
 
 		internal sealed class Handler(AccountDbContext accountDbContext,
 			IValidator<Command> validator,
-			IConfiguration configuration)
+			IConfiguration configuration,
+			AccountService.Features.Authentication.Refresh.IRefreshTokenService refreshTokenService)
 			: IRequestHandler<Command, Result<bool>>
 		{
 			public async Task<Result<bool>> Handle(Command request, CancellationToken cancellationToken)
@@ -85,7 +86,9 @@ public class ResetPassword
 					return new Error(validationResult.ToString());
 				}
 				var user = await accountDbContext.Users
-					.FirstOrDefaultAsync(x => x.Email == request.Email, cancellationToken);
+					.FirstOrDefaultAsync(
+						x => x.NormalizedEmail == EmailIdentity.Normalize(request.Email),
+						cancellationToken);
 				if (user is null)
 				{
 					return new Error("User doesn't exist");
@@ -112,7 +115,15 @@ public class ResetPassword
 				user.CodeSentAtUtc = null;
 
 				accountDbContext.Users.Update(user);
-				return await accountDbContext.SaveChangesAsync(cancellationToken) > 0;
+				var saved = await accountDbContext.SaveChangesAsync(cancellationToken) > 0;
+				if (saved)
+				{
+					await refreshTokenService.RevokeAllForUserAsync(
+						user.Id,
+						"Password reset",
+						cancellationToken);
+				}
+				return saved;
 			}
 		}
 	}

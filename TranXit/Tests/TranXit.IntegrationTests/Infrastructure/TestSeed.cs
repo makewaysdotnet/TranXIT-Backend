@@ -20,11 +20,11 @@ internal static class TestSeed
 
 		await db.Database.ExecuteSqlInterpolatedAsync($"""
 			SET IDENTITY_INSERT [Users] ON;
-			INSERT INTO [Users] ([Id], [Email], [PasswordHash], [Username], [RoleId], [IsEmailVerified], [Phone])
+			INSERT INTO [Users] ([Id], [Email], [NormalizedEmail], [PasswordHash], [Username], [RoleId], [IsEmailVerified], [Phone])
 			VALUES
-				(1, 'customer.seed@tranxit.test', {passwordHash}, 'Seed Customer', 1, 1, '+920000000001'),
-				(2, 'courier.seed@tranxit.test', {passwordHash}, 'Seed Courier', 2, 1, '+920000000002'),
-				(3, 'admin.seed@tranxit.test', {passwordHash}, 'Seed Admin', 4, 1, '+920000000003');
+				(1, 'customer.seed@tranxit.test', 'customer.seed@tranxit.test', {passwordHash}, 'Seed Customer', 1, 1, '+920000000001'),
+				(2, 'courier.seed@tranxit.test', 'courier.seed@tranxit.test', {passwordHash}, 'Seed Courier', 2, 1, '+920000000002'),
+				(3, 'admin.seed@tranxit.test', 'admin.seed@tranxit.test', {passwordHash}, 'Seed Admin', 4, 1, '+920000000003');
 			SET IDENTITY_INSERT [Users] OFF;
 			""");
 	}

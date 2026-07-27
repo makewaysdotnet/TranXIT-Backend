@@ -64,8 +64,9 @@ public static class AccountProductionAdminBootstrapper
 			return;
 		}
 
+		var normalizedEmail = EmailIdentity.Normalize(email);
 		if (await db.Users.AnyAsync(
-			user => user.Email == email,
+			user => user.NormalizedEmail == normalizedEmail,
 			cancellationToken))
 		{
 			throw new InvalidOperationException(

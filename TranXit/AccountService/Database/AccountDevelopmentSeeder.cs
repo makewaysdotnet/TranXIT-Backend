@@ -18,7 +18,7 @@ public static class AccountDevelopmentSeeder
 		var courierRole = await db.Roles.SingleAsync(r => r.Name == "Courier");
 		var adminRole = await db.Roles.SingleAsync(r => r.Name == "Admin");
 
-		if (!await db.Users.AnyAsync(u => u.Email == CustomerEmail))
+		if (!await db.Users.AnyAsync(u => u.NormalizedEmail == EmailIdentity.Normalize(CustomerEmail)))
 		{
 			db.Users.Add(new User
 			{
@@ -31,7 +31,7 @@ public static class AccountDevelopmentSeeder
 			});
 		}
 
-		if (!await db.Users.AnyAsync(u => u.Email == CourierEmail))
+		if (!await db.Users.AnyAsync(u => u.NormalizedEmail == EmailIdentity.Normalize(CourierEmail)))
 		{
 			db.Users.Add(new User
 			{
@@ -44,7 +44,7 @@ public static class AccountDevelopmentSeeder
 			});
 		}
 
-		if (!await db.Users.AnyAsync(u => u.Email == AdminEmail))
+		if (!await db.Users.AnyAsync(u => u.NormalizedEmail == EmailIdentity.Normalize(AdminEmail)))
 		{
 			db.Users.Add(new User
 			{
