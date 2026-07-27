@@ -1,10 +1,12 @@
 using AccountService.Database;
+using AccountService.Features.Authentication.ExternalLogins.Google;
 using AccountService.Features.Authentication.Refresh;
 using AccountService.Features.Authentication.TokenManager;
 using Carter;
 using FluentValidation;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using SharedManager.Extensions;
 using SharedServicesManager.EmailService;
 using SharedServicesManager.Helpers;
@@ -20,6 +22,13 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddDbContext<AccountDbContext>(o =>
 	o.UseSqlServer(builder.Configuration.GetConnectionString("Database")));
 builder.Services.Configure<MailSettings>(builder.Configuration.GetSection("MailSettings"));
+builder.Services
+	.AddOptions<GoogleExternalLoginOptions>()
+	.Bind(builder.Configuration.GetSection(GoogleExternalLoginOptions.SectionName))
+	.ValidateOnStart();
+builder.Services.AddSingleton<
+	IValidateOptions<GoogleExternalLoginOptions>,
+	GoogleExternalLoginOptionsValidator>();
 
 builder.Services.AddJwtAuthentication(builder.Configuration);
 builder.Services.AddAuthorization(options =>

@@ -16,22 +16,6 @@
       "UpstreamHttpMethod": [ "Post" ],
       "FileCacheOptions": { "TtlSeconds": 60 }
     },
-    // Google Login API
-    {
-      "DownstreamPathTemplate": "/api/login/google",
-      "DownstreamSchema": "http",
-      "DownstreamHttpMethod": "POST",
-      "RouteIsCaseSensitive": false,
-      "DownstreamHostAndPorts": [
-        {
-          "Host": "accountservice",
-          "Port": 8080
-        }
-      ],
-      "UpstreamPathTemplate": "/api/login/google",
-      "UpstreamHttpMethod": [ "Post" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
-    },
     // Register API
     {
       "DownstreamPathTemplate": "/api/register",
