@@ -6,6 +6,8 @@ public partial class User
 
 	public string Email { get; set; } = null!;
 
+	public string NormalizedEmail { get; set; } = null!;
+
 	public string? PasswordHash { get; set; }
 
 	public string Username { get; set; } = null!;

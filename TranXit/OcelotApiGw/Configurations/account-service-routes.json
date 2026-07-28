@@ -16,22 +16,6 @@
       "UpstreamHttpMethod": [ "Post" ],
       "FileCacheOptions": { "TtlSeconds": 60 }
     },
-    // Google Login API
-    {
-      "DownstreamPathTemplate": "/api/login/google",
-      "DownstreamSchema": "http",
-      "DownstreamHttpMethod": "POST",
-      "RouteIsCaseSensitive": false,
-      "DownstreamHostAndPorts": [
-        {
-          "Host": "accountservice",
-          "Port": 8080
-        }
-      ],
-      "UpstreamPathTemplate": "/api/login/google",
-      "UpstreamHttpMethod": [ "Post" ],
-      "FileCacheOptions": { "TtlSeconds": 60 }
-    },
     // Register API
     {
       "DownstreamPathTemplate": "/api/register",
@@ -138,6 +122,48 @@
       "UpstreamPathTemplate": "/api/send-code",
       "UpstreamHttpMethod": [ "Post" ],
       "FileCacheOptions": { "TtlSeconds": 60 }
+    },
+    {
+      "DownstreamPathTemplate": "/api/reset-password",
+      "DownstreamSchema": "http",
+      "DownstreamHttpMethod": "POST",
+      "RouteIsCaseSensitive": false,
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "accountservice",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/reset-password",
+      "UpstreamHttpMethod": [ "Post" ]
+    },
+    {
+      "DownstreamPathTemplate": "/api/refresh",
+      "DownstreamSchema": "http",
+      "DownstreamHttpMethod": "POST",
+      "RouteIsCaseSensitive": false,
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "accountservice",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/refresh",
+      "UpstreamHttpMethod": [ "Post" ]
+    },
+    {
+      "DownstreamPathTemplate": "/api/logout",
+      "DownstreamSchema": "http",
+      "DownstreamHttpMethod": "POST",
+      "RouteIsCaseSensitive": false,
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "accountservice",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/logout",
+      "UpstreamHttpMethod": [ "Post" ]
     }
   ]
 }

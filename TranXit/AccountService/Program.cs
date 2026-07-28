@@ -1,10 +1,12 @@
 using AccountService.Database;
+using AccountService.Features.Authentication.ExternalLogins.Google;
 using AccountService.Features.Authentication.Refresh;
 using AccountService.Features.Authentication.TokenManager;
 using Carter;
 using FluentValidation;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using SharedManager.Extensions;
 using SharedServicesManager.EmailService;
 using SharedServicesManager.Helpers;
@@ -20,6 +22,13 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddDbContext<AccountDbContext>(o =>
 	o.UseSqlServer(builder.Configuration.GetConnectionString("Database")));
 builder.Services.Configure<MailSettings>(builder.Configuration.GetSection("MailSettings"));
+builder.Services
+	.AddOptions<GoogleExternalLoginOptions>()
+	.Bind(builder.Configuration.GetSection(GoogleExternalLoginOptions.SectionName))
+	.ValidateOnStart();
+builder.Services.AddSingleton<
+	IValidateOptions<GoogleExternalLoginOptions>,
+	GoogleExternalLoginOptionsValidator>();
 
 builder.Services.AddJwtAuthentication(builder.Configuration);
 builder.Services.AddAuthorization(options =>
@@ -84,7 +93,8 @@ builder.Services.AddMassTransit(busConfigurator =>
 	busConfigurator.AddSagaStateMachines(assembly);
 	busConfigurator.AddSagas(assembly);
 	busConfigurator.AddActivities(assembly);
-	if (builder.Environment.IsEnvironment("Testing"))
+	if (builder.Environment.IsEnvironment("Testing") ||
+		builder.Configuration.GetValue<bool>("TestInfrastructure:UseInMemoryBus"))
 	{
 		busConfigurator.UsingInMemory((context, configurator) =>
 		{
@@ -108,6 +118,7 @@ builder.Services.AddCors();
 
 var app = builder.Build();
 var applyMigrationsOnly = args.Contains("--apply-migrations", StringComparer.OrdinalIgnoreCase);
+var bootstrapAdminOnly = args.Contains("--bootstrap-admin", StringComparer.OrdinalIgnoreCase);
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsEnvironment("Testing"))
@@ -117,6 +128,14 @@ if (!app.Environment.IsEnvironment("Testing"))
 
 if (applyMigrationsOnly)
 {
+	return;
+}
+
+if (bootstrapAdminOnly)
+{
+	await AccountProductionAdminBootstrapper.BootstrapAsync(
+		app.Services,
+		builder.Configuration);
 	return;
 }
 

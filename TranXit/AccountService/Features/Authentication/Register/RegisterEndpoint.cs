@@ -96,9 +96,12 @@ public class AccountRegister
 				return new Error(validationResult.ToString());
 			}
 
+			var normalizedEmail = EmailIdentity.Normalize(request.Email);
 			var user = await accountDbContext
 				.Users
-				.FirstOrDefaultAsync(x => x.Email == request.Email, cancellationToken);
+				.FirstOrDefaultAsync(
+					x => x.NormalizedEmail == normalizedEmail,
+					cancellationToken);
 
 			if (user is not null && Convert.ToBoolean(user.IsEmailVerified))
 			{
@@ -129,7 +132,7 @@ public class AccountRegister
 
 			user = new User
 			{
-				Email = request.Email,
+				Email = request.Email.Trim(),
 				PasswordHash = passwordHash,
 				RoleId = roleResult.Role.Id,
 				Username = request.Username,
@@ -139,7 +142,14 @@ public class AccountRegister
 			};
 
 			await accountDbContext.AddAsync(user);
-			await accountDbContext.SaveChangesAsync(cancellationToken);
+			try
+			{
+				await accountDbContext.SaveChangesAsync(cancellationToken);
+			}
+			catch (DbUpdateException exception) when (EmailIdentity.IsUniqueViolation(exception))
+			{
+				return new Error("User already exist");
+			}
 
 			var mailRequest = new MailRequest
 			{

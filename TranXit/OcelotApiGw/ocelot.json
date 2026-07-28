@@ -16,21 +16,6 @@
       ]
     },
     {
-      "DownstreamPathTemplate": "/api/login/google",
-      "DownstreamSchema": "http",
-      "RouteIsCaseSensitive": false,
-      "DownstreamHostAndPorts": [
-        {
-          "Port": 8080,
-          "Host": "accountservice"
-        }
-      ],
-      "UpstreamPathTemplate": "/api/login/google",
-      "UpstreamHttpMethod": [
-        "POST"
-      ]
-    },
-    {
       "DownstreamPathTemplate": "/api/register",
       "DownstreamSchema": "http",
       "RouteIsCaseSensitive": false,
@@ -116,6 +101,21 @@
         }
       ],
       "UpstreamPathTemplate": "/api/refresh",
+      "UpstreamHttpMethod": [
+        "POST"
+      ]
+    },
+    {
+      "DownstreamPathTemplate": "/api/logout",
+      "DownstreamSchema": "http",
+      "RouteIsCaseSensitive": false,
+      "DownstreamHostAndPorts": [
+        {
+          "Port": 8080,
+          "Host": "accountservice"
+        }
+      ],
+      "UpstreamPathTemplate": "/api/logout",
       "UpstreamHttpMethod": [
         "POST"
       ]

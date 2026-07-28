@@ -78,7 +78,9 @@ public class AccountLogin
 			var user = await accountDbContext
 				.Users
 				.Include(x => x.Role)
-				.FirstOrDefaultAsync(x => x.Email == request.Email, cancellationToken);
+				.FirstOrDefaultAsync(
+					x => x.NormalizedEmail == EmailIdentity.Normalize(request.Email),
+					cancellationToken);
 			if (user is null)
 			{
 				return new Error("User doesn't exist");
@@ -86,6 +88,20 @@ public class AccountLogin
 			if (!BC.EnhancedVerify(request.Password, user.PasswordHash))
 			{
 				return new Error("Invalid password");
+			}
+			if (user.IsEmailVerified is not true)
+			{
+				return new Error(
+					"Account verification required",
+					new LoginResult
+					{
+						Id = user.Id,
+						Email = user.Email,
+						Name = user.Username,
+						RoleId = user.RoleId,
+						Role = user.Role?.Name,
+						IsEmailVerified = false
+					});
 			}
 			var tokenBuilderRequest = new TokenBuilderRequest
 			{

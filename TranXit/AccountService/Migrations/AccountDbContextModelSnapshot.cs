@@ -36,8 +36,18 @@ namespace AccountService.Migrations
                     b.Property<DateTime>("ExpiresAtUtc")
                         .HasColumnType("datetime");
 
+                    b.Property<Guid>("FamilyId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("ParentTokenId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime?>("RevokedAtUtc")
                         .HasColumnType("datetime");
+
+                    b.Property<string>("RevokedReason")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("TokenHash")
                         .IsRequired()
@@ -50,6 +60,12 @@ namespace AccountService.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("UserId");
+
+                    b.HasIndex(new[] { "FamilyId" }, "IX_RefreshTokens_FamilyId");
+
+                    b.HasIndex(new[] { "ParentTokenId" }, "UX_RefreshTokens_ParentTokenId")
+                        .IsUnique()
+                        .HasFilter("[ParentTokenId] IS NOT NULL");
 
                     b.ToTable("RefreshTokens");
                 });
@@ -70,7 +86,32 @@ namespace AccountService.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex(new[] { "Name" }, "UX_Roles_Name")
+                        .IsUnique();
+
                     b.ToTable("Roles");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Name = "Customer"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            Name = "Courier"
+                        },
+                        new
+                        {
+                            Id = 3,
+                            Name = "Agent"
+                        },
+                        new
+                        {
+                            Id = 4,
+                            Name = "Admin"
+                        });
                 });
 
             modelBuilder.Entity("AccountService.Database.User", b =>
@@ -91,6 +132,11 @@ namespace AccountService.Migrations
 
                     b.Property<bool?>("IsEmailVerified")
                         .HasColumnType("bit");
+
+                    b.Property<string>("NormalizedEmail")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
 
                     b.Property<string>("PasswordHash")
                         .HasColumnType("nvarchar(max)");
@@ -117,7 +163,12 @@ namespace AccountService.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("RoleId");
+                    b.HasIndex(new[] { "NormalizedEmail" }, "UX_Users_NormalizedEmail")
+                        .IsUnique();
+
+                    b.HasIndex(new[] { "RoleId" }, "UX_Users_SingleAdmin")
+                        .IsUnique()
+                        .HasFilter("[RoleId] = 4");
 
                     b.ToTable("Users");
                 });

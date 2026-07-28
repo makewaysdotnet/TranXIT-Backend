@@ -70,24 +70,22 @@ public sealed class AuthenticationRegressionTests(SqlContainerFixture fixture) :
 		user.VerificationCode.Should().NotMatchRegex(@"^\d{6}$");
 	}
 
-	[Fact(DisplayName = "T-AUTH-6.GoogleLoginAdminBlocked")]
-	public async Task GoogleLoginAdminBlocked()
+	[Fact(DisplayName = "T-AUTH-12.GoogleLoginDisabled")]
+	public async Task GoogleLoginDisabled()
 	{
-		// UC-AUTH-6
+		// UC-AUTH-12
 		var response = await AccountClient.PostAsJsonAsync("/api/login/google", new
 		{
-			name = "Blocked Admin",
-			email = "google-admin@tranxit.test",
+			name = "Seed Customer",
+			email = "customer.seed@tranxit.test",
 			image = "",
-			role = "Admin",
-			phone = "+920000000009",
+			role = "Customer",
+			phone = "+920000000001",
 			provider = 0
 		});
 
-		response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-		var result = await response.ReadApiResultAsync<LoginValue>();
-		result.IsSuccess.Should().BeFalse();
-		result.Value.Should().BeNull();
+		response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+		(await response.Content.ReadAsStringAsync()).Should().BeEmpty();
 	}
 
 	private static object RegisterPayload(string email, string? role = null, int? roleId = null)

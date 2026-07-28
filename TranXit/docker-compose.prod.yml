@@ -1,6 +1,9 @@
 networks:
   backend:
     internal: true
+  egress:
+    driver: bridge
+    internal: false
   edge:
     driver: bridge
 
@@ -118,6 +121,7 @@ services:
       Jwt__RefreshExpiryDays: ${JWT_REFRESH_EXPIRY_DAYS:?Set JWT_REFRESH_EXPIRY_DAYS}
       Jwt__RequireHttpsMetadata: "true"
       SharedJwtSecrets__Key: ${JWT_SECRET:?Set JWT_SECRET}
+      AdminBootstrap__Email: ${ADMIN_EMAIL:?Set ADMIN_EMAIL}
       MailSettings__DisableSending: "false"
       MailSettings__Server: ${SMTP_HOST:?Set SMTP_HOST}
       MailSettings__Port: ${SMTP_PORT:?Set SMTP_PORT}
@@ -128,6 +132,7 @@ services:
     ports: !reset []
     networks:
       - backend
+      - egress
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -167,6 +172,7 @@ services:
     ports: !reset []
     networks:
       - backend
+      - egress
     depends_on:
       sqlserver:
         condition: service_healthy

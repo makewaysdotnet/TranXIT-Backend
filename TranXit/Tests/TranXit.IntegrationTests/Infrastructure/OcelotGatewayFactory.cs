@@ -20,12 +20,19 @@ internal sealed class OcelotGatewayFactory : WebApplicationFactory<OcelotProgram
 	protected override void ConfigureWebHost(IWebHostBuilder builder)
 	{
 		TestConfiguration.ApplyToProcessEnvironment("unused");
-		Environment.SetEnvironmentVariable("Routes__3__DownstreamHostAndPorts__0__Host", "127.0.0.1");
-		Environment.SetEnvironmentVariable("Routes__3__DownstreamHostAndPorts__0__Port", _downstreamPort.ToString());
 		builder.UseEnvironment("Testing");
 		builder.ConfigureAppConfiguration((_, configuration) =>
 		{
-			configuration.AddInMemoryCollection(TestConfiguration.ForService("unused"));
+			var currentConfiguration = configuration.Build();
+			var rolesRoute = currentConfiguration
+				.GetSection("Routes")
+				.GetChildren()
+				.Single(route => route["UpstreamPathTemplate"] == "/api/roles");
+			var routePrefix = $"Routes:{rolesRoute.Key}:DownstreamHostAndPorts:0";
+			var testConfiguration = TestConfiguration.ForService("unused");
+			testConfiguration[$"{routePrefix}:Host"] = "127.0.0.1";
+			testConfiguration[$"{routePrefix}:Port"] = _downstreamPort.ToString();
+			configuration.AddInMemoryCollection(testConfiguration);
 		});
 	}
 }

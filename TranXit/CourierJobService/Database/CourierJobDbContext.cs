@@ -111,6 +111,8 @@ public partial class CourierJobDbContext : DbContext
 
         modelBuilder.Entity<CargoMode>(entity =>
         {
+            entity.HasData(CourierJobReferenceData.CreateCargoModes());
+
             entity.Property(e => e.Name)
                 .HasMaxLength(30)
                 .IsUnicode(false);
@@ -118,6 +120,8 @@ public partial class CourierJobDbContext : DbContext
 
         modelBuilder.Entity<City>(entity =>
         {
+            entity.HasData(CourierJobReferenceData.CreateCities());
+
             entity.Property(e => e.CityName)
                 .HasMaxLength(100)
                 .IsUnicode(false);
@@ -130,6 +134,8 @@ public partial class CourierJobDbContext : DbContext
 
         modelBuilder.Entity<Country>(entity =>
         {
+            entity.HasData(CourierJobReferenceData.CreateCountries());
+
             entity.Property(e => e.CountryName)
                 .HasMaxLength(50)
                 .IsUnicode(false);
@@ -137,6 +143,8 @@ public partial class CourierJobDbContext : DbContext
 
         modelBuilder.Entity<CourierMode>(entity =>
         {
+            entity.HasData(CourierJobReferenceData.CreateCourierModes());
+
             entity.Property(e => e.Name)
                 .HasMaxLength(30)
                 .IsUnicode(false);
@@ -145,6 +153,7 @@ public partial class CourierJobDbContext : DbContext
         modelBuilder.Entity<DeliveryType>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PK_DeliveryOptions");
+            entity.HasData(CourierJobReferenceData.CreateDeliveryTypes());
 
             entity.Property(e => e.Name)
                 .HasMaxLength(50)
@@ -153,6 +162,8 @@ public partial class CourierJobDbContext : DbContext
 
         modelBuilder.Entity<ItemType>(entity =>
         {
+            entity.HasData(CourierJobReferenceData.CreateItemTypes());
+
             entity.Property(e => e.Name)
                 .HasMaxLength(50)
                 .IsUnicode(false);
@@ -252,6 +263,8 @@ public partial class CourierJobDbContext : DbContext
 
         modelBuilder.Entity<JobStatus>(entity =>
         {
+            entity.HasData(CourierJobReferenceData.CreateJobStatuses());
+
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .IsUnicode(false);

@@ -74,7 +74,8 @@ builder.Services.AddHealthChecks();
 builder.Services.AddMassTransit(busConfigurator =>
 {
 	busConfigurator.SetKebabCaseEndpointNameFormatter();
-	if (builder.Environment.IsEnvironment("Testing"))
+	if (builder.Environment.IsEnvironment("Testing") ||
+		builder.Configuration.GetValue<bool>("TestInfrastructure:UseInMemoryBus"))
 	{
 		busConfigurator.UsingInMemory((context, configurator) =>
 		{
@@ -134,9 +135,18 @@ app.UseCors(options =>
 app.UseAuthentication();
 app.UseAuthorization();
 //app.UseAntiforgery();
+if (app.Environment.IsEnvironment("Testing"))
+{
+	app.MapGet(
+		"/api/test/error",
+		ThrowSensitiveTestException);
+}
 app.MapCarter();
 app.UseExceptionHandler();
 app.MapHealthChecks("/courierjobservice");
 app.MapHealthChecks("/health");
 
 app.Run();
+
+static IResult ThrowSensitiveTestException()
+	=> throw new InvalidOperationException("Sensitive test exception");

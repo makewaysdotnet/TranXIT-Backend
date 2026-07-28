@@ -173,6 +173,23 @@ namespace CourierJobService.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("CargoModes");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Name = "Sea freight"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            Name = "Air freight"
+                        },
+                        new
+                        {
+                            Id = 3,
+                            Name = "Road freight"
+                        });
                 });
 
             modelBuilder.Entity("CourierJobService.Database.City", b =>
@@ -197,6 +214,38 @@ namespace CourierJobService.Migrations
                     b.HasIndex("CountryId");
 
                     b.ToTable("Cities");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            CityName = "Karachi",
+                            CountryId = 1
+                        },
+                        new
+                        {
+                            Id = 2,
+                            CityName = "Lahore",
+                            CountryId = 1
+                        },
+                        new
+                        {
+                            Id = 3,
+                            CityName = "Hamburg",
+                            CountryId = 2
+                        },
+                        new
+                        {
+                            Id = 4,
+                            CityName = "Berlin",
+                            CountryId = 2
+                        },
+                        new
+                        {
+                            Id = 5,
+                            CityName = "Dubai",
+                            CountryId = 3
+                        });
                 });
 
             modelBuilder.Entity("CourierJobService.Database.Country", b =>
@@ -215,6 +264,23 @@ namespace CourierJobService.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Countries");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            CountryName = "Pakistan"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            CountryName = "Germany"
+                        },
+                        new
+                        {
+                            Id = 3,
+                            CountryName = "United Arab Emirates"
+                        });
                 });
 
             modelBuilder.Entity("CourierJobService.Database.CourierMode", b =>
@@ -233,6 +299,23 @@ namespace CourierJobService.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("CourierModes");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Name = "Door to door"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            Name = "Port to port"
+                        },
+                        new
+                        {
+                            Id = 3,
+                            Name = "Warehouse pickup"
+                        });
                 });
 
             modelBuilder.Entity("CourierJobService.Database.DeliveryType", b =>
@@ -255,6 +338,26 @@ namespace CourierJobService.Migrations
                         .HasName("PK_DeliveryOptions");
 
                     b.ToTable("DeliveryTypes");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Name = "Economy",
+                            NoOfDays = 22
+                        },
+                        new
+                        {
+                            Id = 2,
+                            Name = "Standard",
+                            NoOfDays = 16
+                        },
+                        new
+                        {
+                            Id = 3,
+                            Name = "Express",
+                            NoOfDays = 7
+                        });
                 });
 
             modelBuilder.Entity("CourierJobService.Database.ItemType", b =>
@@ -273,6 +376,28 @@ namespace CourierJobService.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("ItemTypes");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Name = "Cartons"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            Name = "Pallets"
+                        },
+                        new
+                        {
+                            Id = 3,
+                            Name = "Machinery"
+                        },
+                        new
+                        {
+                            Id = 4,
+                            Name = "Documents"
+                        });
                 });
 
             modelBuilder.Entity("CourierJobService.Database.Job", b =>
@@ -467,6 +592,43 @@ namespace CourierJobService.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("JobStatuses");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Status = "Open"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            Status = "Closed"
+                        },
+                        new
+                        {
+                            Id = 3,
+                            Status = "Won"
+                        },
+                        new
+                        {
+                            Id = 4,
+                            Status = "Lost"
+                        },
+                        new
+                        {
+                            Id = 5,
+                            Status = "Bidding"
+                        },
+                        new
+                        {
+                            Id = 6,
+                            Status = "InTransit"
+                        },
+                        new
+                        {
+                            Id = 7,
+                            Status = "Delivered"
+                        });
                 });
 
             modelBuilder.Entity("CourierJobService.Database.Bidding", b =>
