@@ -31,6 +31,7 @@ public sealed class CustomerBidAcceptanceRegressionTests(SqlContainerFixture fix
 
 		job!.JobStatusId.Should().BeNull();
 		job.IsJobStatusFromBid.Should().BeTrue();
+		job.AcceptedBidProposalId.Should().Be(100);
 		winningBid!.JobStatusId.Should().Be(3);
 		winningBid.TotalAmount.Should().Be(1000);
 		losingBid!.JobStatusId.Should().Be(4);
