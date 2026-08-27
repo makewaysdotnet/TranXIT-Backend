@@ -4,6 +4,7 @@ using CourierJobService.Features.Jobs.Shared;
 using FluentValidation;
 using Mapster;
 using MediatR;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using SharedServicesManager;
 using SharedServicesManager.Helpers;
@@ -136,9 +137,28 @@ public class CreateJob
 				}).ToList(),
 			};
 
-			await jobDbContext.Jobs.AddAsync(createdJob);
-			await jobDbContext.SaveChangesAsync();
-			return new CreateUpdateJobResult { JobId = createdJob.Id };
+			await jobDbContext.Jobs.AddAsync(createdJob, cancellationToken);
+			const int maxNumberAttempts = 3;
+			for (var attempt = 0; attempt < maxNumberAttempts; attempt++)
+			{
+				try
+				{
+					await jobDbContext.SaveChangesAsync(cancellationToken);
+					return new CreateUpdateJobResult { JobId = createdJob.Id };
+				}
+				catch (DbUpdateException exception) when (
+					exception.InnerException is SqlException sql &&
+					(sql.Number is 2601 or 2627) &&
+					sql.Message.Contains("'IX_Jobs'", StringComparison.Ordinal))
+				{
+					// SaveChanges rolls back the entire job/items batch; only retry number collisions.
+					if (attempt + 1 < maxNumberAttempts)
+					{
+						createdJob.JobNumber = utils.GenerateJobNumber();
+					}
+				}
+			}
+			return new Error("Unable to allocate a shipment number. Please try again.");
 		}
 	}
 }

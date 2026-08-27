@@ -1,4 +1,4 @@
-﻿using RandomString4Net;
+﻿using System.Security.Cryptography;
 
 namespace SharedServicesManager.Helpers
 {
@@ -22,7 +22,7 @@ namespace SharedServicesManager.Helpers
 
 		public string GenerateJobNumber()
 		{
-			return RandomString.GetString(Types.ALPHANUMERIC_LOWERCASE, 8);
+			return RandomNumberGenerator.GetString("abcdefghijklmnopqrstuvwxyz0123456789", 8);
 		}
 	}
 }
