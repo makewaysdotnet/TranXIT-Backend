@@ -66,6 +66,7 @@ audience, session and ownership validation remain enabled.
 | First deploy fails during Account migration | No green marker; services fenced |
 | First deploy fails after starting the stack | No rollback target; running services must be stopped |
 | First deploy and candidate success | Private smoke before admission; correct green marker |
+| Invalid required URL configuration (12 variants) | Exit 2 before any deploy-side Docker call; exact running release and acknowledged writes unchanged |
 | Config/build failure before fencing | Running green release and writes unchanged |
 | Incomplete backup pair | No migration or restore; known-green code recovered |
 | Partial migration | Both actual SQL backups restored; schema markers removed |
@@ -86,6 +87,27 @@ verified customer uses the real BFF to create shipments; separate registration
 requests also write to Account SQL. Every successful response's exact email/id
 pair must remain in SQL. Rejected requests must be absent. A network/TLS failure
 while Caddy is running is a test failure, not evidence of a closed gate.
+
+`T-NFR-9.RuntimeInvalidConfiguration` runs immediately after the first green
+release, before the baseline backup. For each of `TRANXIT_EGRESS_PROBE_URL`,
+`PUBLIC_APP_URL` and `STAGING_APP_URL`, it tests unset, empty, non-HTTPS and
+empty-overrides-inherited values. A private env copy is temporarily edited and always
+restored; unset inputs are also removed from the deploy subprocess environment.
+The empty-overrides-inherited row supplies a valid parent value but writes
+`NAME=''` in the env file, proving effective configuration is validated after
+loading the file and a shipped blank cannot be hidden by an inherited value.
+An omitted file entry may still use valid environment-supplied configuration.
+No production failure-injection flag is used.
+
+Each row asserts exit 2 with a setting-name diagnostic, zero deploy-side Docker
+calls, identical container IDs/start times/restart counts, exact marker/admission
+file contents and metadata, unchanged refs/reflogs, and unchanged SQL migration,
+backup and restore boundaries. Both public origins acknowledge new account/job
+writes before and after the rejected deploy, and exact persisted email/ID pairs
+are checked. Sanitized before/after state snapshots and outcomes are exported;
+env files, cookies and credentials are not. These 12 cases supplement the original
+20 cases and leave the restore credibility mutation intact. They exercise the actual
+deployment preflight rather than injecting a command failure.
 
 `T-NFR-9.AcknowledgedWritesPreserved` is the credibility assertion. The controller
 temporarily removes the post-admission restore refusal only in its private

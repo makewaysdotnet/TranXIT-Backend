@@ -29,6 +29,86 @@ run_deploy() {
     --frontend-ref "$F01_TARGET_FRONTEND" --migration-policy "$F01_POLICY" "${flags[@]}"
 }
 
+run_invalid_config_deploy() (
+  local name="$1" variant="$2" saved_env="/work/state/$F01_CASE.env.original" inherited_value
+  case "$name" in TRANXIT_EGRESS_PROBE_URL|PUBLIC_APP_URL|STAGING_APP_URL) ;; *) exit 78 ;; esac
+  case "$variant" in unset|empty|non-https|empty-overrides-inherited) ;; *) exit 78 ;; esac
+  inherited_value="${!name}"
+  cp /work/env.staging "$saved_env" || exit 1
+  # Keep the adapter's existing private env path; restore it even when deploy exits fatally.
+  trap 'status=$?; if cp "$saved_env" /work/env.staging; then /bin/rm -f "$saved_env" || status=1; else status=1; fi; exit "$status"' EXIT
+  [ "$(grep -c "^$name=" "$saved_env")" = 1 ] || { fail 'Expected one fixture setting'; exit 1; }
+  awk -v name="$name" 'index($0,name "=") != 1' "$saved_env" > /work/env.staging || exit 1
+  case "$variant" in
+    empty|empty-overrides-inherited) printf "%s=''\n" "$name" >> /work/env.staging || exit 1 ;;
+    non-https) printf "%s='http://invalid-configuration.example.test/a1'\n" "$name" >> /work/env.staging || exit 1 ;;
+  esac
+  unset TRANXIT_EGRESS_PROBE_URL PUBLIC_APP_URL STAGING_APP_URL
+  unset TRANXIT_ALLOW_FAILURE_INJECTION TRANXIT_DEPLOY_TEST_FORCE_SMOKE_FAILURE TRANXIT_DEPLOY_TEST_FORCE_POST_ADMISSION_FAILURE
+  if [ "$variant" = empty-overrides-inherited ]; then export "$name=$inherited_value"; fi
+  export TRANXIT_ENV_FILE=/work/env.staging
+  run_deploy
+)
+
+invalid_config_test() {
+  # UC-NFR-9 - T-NFR-9.RuntimeInvalidConfiguration (real entry point, no injected failure).
+  local name="$1" variant="$2" status=0 log="/work/state/$F01_CASE.raw.log"
+  . /work/refs.env
+  set -a; . /work/env.staging; set +a
+  export TRANXIT_IMAGE_TAG="${GREEN_BACKEND:0:12}"
+  export F01_FAULT_POINTS='' F01_PERSISTENT=false
+  /bin/rm -f /work/state/recovering
+  printf '0' > /work/state/sequence
+  : > "/work/state/$F01_CASE_KEY.accounts"; : > "/work/state/$F01_CASE_KEY.jobs"
+  if [ ! -f /work/state/actor-ready ] || [ ! -f /work/markers/admission-staging/open ]; then
+    fail 'Preflight requires an admitted green release and verified actor'; return 1
+  fi
+  if [ -e /work/markers/deploy-staging-admitted ] || [ -L /work/markers/deploy-staging-admitted ] ||
+     [ -e /work/markers/restore-staging-in-progress ] || [ -L /work/markers/restore-staging-in-progress ]; then
+    fail 'Preflight baseline has an unresolved admission or restore'; return 1
+  fi
+  cmp /work/state/green.marker /work/markers/last-staging-green >/dev/null
+  [ "$(sentinels)" = '0|0' ]
+
+  touch /work/state/probes-enabled
+  probe invalid-config-before-primary open
+  probe invalid-config-before-secondary open
+  /bin/rm -f /work/state/probes-enabled
+  : > /work/state/docker-events
+  snapshot_preflight_state > "/work/state/$F01_CASE.before"
+  sanitize < "/work/state/$F01_CASE.before" > "/work/public-results/$F01_CASE.before-state.txt"
+  run_invalid_config_deploy "$name" "$variant" > "$log" 2>&1 || status=$?
+  sanitize < "$log" > "/work/public-results/$F01_CASE.log"
+  snapshot_preflight_state > "/work/state/$F01_CASE.after"
+  sanitize < "/work/state/$F01_CASE.after" > "/work/public-results/$F01_CASE.after-state.txt"
+
+  [ "$status" = 2 ] || { fail "$F01_CASE expected preflight exit 2, got $status"; return 1; }
+  [ ! -s /work/state/docker-events ] || { fail "$F01_CASE reached deploy-side Docker"; return 1; }
+  cmp "/work/state/$F01_CASE.before" "/work/state/$F01_CASE.after" >/dev/null || {
+    fail "$F01_CASE changed containers, release files/refs, backup/restore history or schema"; return 1;
+  }
+  grep -F "$name" "$log" >/dev/null || { fail "$F01_CASE omitted the setting name"; return 1; }
+  if grep -F -e "$PUBLIC_APP_URL" -e "$STAGING_APP_URL" -e "$TRANXIT_EGRESS_PROBE_URL" \
+    -e 'invalid-configuration.example.test' "$log" >/dev/null; then
+    fail "$F01_CASE disclosed a configuration value"; return 1
+  fi
+  assert_writes "$F01_CASE_KEY"
+  assert_writes "$(cat /work/state/baseline.key)"
+  [ "$(sql Tranxit_Account "SET NOCOUNT ON; SELECT COUNT(*) FROM Users WHERE Id=$(cat /work/state/actor.id) AND IsEmailVerified=1;")" = 1 ]
+  touch /work/state/probes-enabled
+  probe invalid-config-after-primary open
+  probe invalid-config-after-secondary open
+  /bin/rm -f /work/state/probes-enabled
+  assert_writes "$F01_CASE_KEY"
+  [ "$(wc -l < "/work/state/$F01_CASE_KEY.accounts")" = 4 ]
+  [ "$(wc -l < "/work/state/$F01_CASE_KEY.jobs")" = 4 ]
+
+  jq -nc --arg test "$F01_CASE" --arg setting "$name" --arg variant "$variant" \
+    '{test:$test,outcome:"passed",setting:$setting,variant:$variant,exitStatus:2,deployDockerCalls:0,
+      stateUnchanged:true,publicOrigins:2,accountWrites:4,jobWrites:4,restores:"0|0"}' >> /work/public-results/cases.jsonl
+  printf 'PASS: %s (exit=2 Docker=0 unchanged-state accounts=4 jobs=4 origins=2)\n' "$F01_CASE"
+}
+
 case_test() {
   # UC-NFR-9 - T-NFR-9.RuntimeDeploymentMatrix (case-specific assertions below).
   . /work/refs.env
@@ -123,6 +203,7 @@ case_test() {
 }
 
 if [ "${1:-}" = --case ]; then case_test; exit; fi
+if [ "${1:-}" = --invalid-config ]; then invalid_config_test "${2:-}" "${3:-}"; exit; fi
 
 mkdir -p /work/state /work/public-results /work/markers /work/backups /work/origins
 finish() {
@@ -243,6 +324,21 @@ run_case() {
   bash /harness/controller.sh --case
 }
 
+run_invalid_config_cases() {
+  local name variant key keys=()
+  for name in TRANXIT_EGRESS_PROBE_URL PUBLIC_APP_URL STAGING_APP_URL; do
+    for variant in unset empty non-https empty-overrides-inherited; do
+      case_number=$((case_number + 1))
+      export F01_CASE="InvalidConfig-$name-$variant" F01_CASE_KEY="c$case_number-$(openssl rand -hex 3)"
+      export F01_POLICY=restore-required
+      echo "[recovery] Running $F01_CASE."
+      bash /harness/controller.sh --invalid-config "$name" "$variant"
+      keys+=("$F01_CASE_KEY")
+    done
+  done
+  for key in "${keys[@]}"; do assert_writes "$key"; done
+}
+
 reset_to_baseline() {
   /bin/rm -f /work/state/probes-enabled
   export TRANXIT_IMAGE_TAG="${GREEN_BACKEND:0:12}"
@@ -283,6 +379,8 @@ run_case FirstDeploySuccess expand-contract '' 0 success '0|0' '0|0'
 printf '%s' "$F01_CASE_KEY" > /work/state/baseline.key
 cp /work/markers/last-staging-green /work/state/green.marker
 /bin/rm -f /work/state/probes-enabled
+export F01_FIRST=false F01_TARGET_SHA="$CANDIDATE_BACKEND" F01_TARGET_FRONTEND="$CANDIDATE_FRONTEND"
+run_invalid_config_cases
 bash /work/backend/TranXit/scripts/backup.sh --env staging --release-id baseline > /work/state/baseline-backup.log 2>&1
 BASELINE_MANIFEST="$(awk -F= '/^MANIFEST=/{print substr($0,10)}' /work/state/baseline-backup.log)"
 [ -f "$BASELINE_MANIFEST" ]

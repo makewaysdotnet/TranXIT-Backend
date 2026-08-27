@@ -161,6 +161,54 @@ assert_writes() {
   done
 }
 
+snapshot_preflight_state() {
+  local service ids id state root path repo database
+  for service in caddy frontend ocelotapigw accountservice courierjobservice sqlserver rabbitmq mailpit; do
+    ids="$(/usr/local/bin/docker-real ps -aq --no-trunc \
+      --filter "label=com.docker.compose.project=$F01_PROJECT" \
+      --filter "label=com.docker.compose.service=$service")" || return 1
+    [ -n "$ids" ] || { fail "Preflight baseline is missing $service"; return 1; }
+    for id in $(printf '%s\n' "$ids" | LC_ALL=C sort); do
+      state="$(/usr/local/bin/docker-real inspect --format '{{.State.Status}}' "$id")" || return 1
+      [ "$state" = running ] || { fail "Preflight baseline $service is not running"; return 1; }
+      printf 'container|%s|' "$service"
+      /usr/local/bin/docker-real inspect --format \
+        '{{.Id}}|{{.State.Status}}|{{.State.StartedAt}}|{{.State.FinishedAt}}|{{.RestartCount}}|{{.Config.Image}}' "$id" || return 1
+    done
+  done
+
+  # Include metadata, not just contents: re-truncating an empty deploy lock is a mutation.
+  for root in /work/markers /work/backups; do
+    find "$root" -print0 | LC_ALL=C sort -z | while IFS= read -r -d '' path; do
+      stat -c 'file|%n|%F|%i|%a|%u|%g|%s|%y|%z' "$path" || return 1
+      if [ -L "$path" ]; then readlink "$path" || return 1
+      elif [ -f "$path" ]; then sha256sum "$path" || return 1; fi
+    done || return 1
+  done
+  for repo in backend frontend; do
+    printf 'repo|%s\n' "$repo"
+    git -C "/work/$repo" rev-parse HEAD || return 1
+    git -C "/work/$repo" for-each-ref --format='%(refname)|%(objectname)' || return 1
+    # A checkout followed by a checkout back must not pass an unchanged-HEAD comparison.
+    git -C "/work/$repo" reflog --all --format='%H|%gD' | sha256sum || return 1
+    sha256sum "/work/$repo/.git/HEAD" || return 1
+  done
+  sha256sum /work/env.staging || return 1
+  sql master "SET NOCOUNT ON;
+    SELECT CONCAT('restore|',destination_database_name,'|',COUNT_BIG(*),'|',MAX(restore_history_id))
+      FROM msdb.dbo.restorehistory WHERE destination_database_name IN ('Tranxit_Account','Tranxit_CourierJob')
+      GROUP BY destination_database_name ORDER BY destination_database_name;
+    SELECT CONCAT('backup|',database_name,'|',COUNT_BIG(*),'|',MAX(backup_set_id))
+      FROM msdb.dbo.backupset WHERE database_name IN ('Tranxit_Account','Tranxit_CourierJob')
+      GROUP BY database_name ORDER BY database_name;" || return 1
+  for database in Tranxit_Account Tranxit_CourierJob; do
+    printf 'schema|%s\n' "$database"
+    sql "$database" "SET NOCOUNT ON;
+      SELECT CONCAT('candidate|',IIF(OBJECT_ID(N'__F01CandidateMarker') IS NULL,0,1));
+      SELECT CONCAT('migration|',MigrationId,'|',ProductVersion) FROM [__EFMigrationsHistory] ORDER BY MigrationId;" || return 1
+  done
+}
+
 sanitize() {
   jq -Rrs 'reduce (env | to_entries[] | select(.key | test("PASSWORD|SECRET|HASH")) | .value | select(length > 0)) as $secret
     (. ; split($secret) | join("[redacted]")) |

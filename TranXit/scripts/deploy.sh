@@ -96,6 +96,28 @@ set -a
 . "$ENV_FILE"
 set +a
 
+validate_deploy_inputs() {
+  local name value authority
+  for name in PUBLIC_APP_URL STAGING_APP_URL TRANXIT_EGRESS_PROBE_URL; do
+    value="${!name:-}"
+    if [ -z "$value" ]; then
+      printf 'Missing required deployment setting: %s\n' "$name" >&2
+      return 2
+    fi
+    authority="${value#https://}"
+    authority="${authority%%[/?#]*}"
+    if [[ "$value" != https://* ]] || [[ "$value" == *[[:space:]]* ]] ||
+       [ -z "$authority" ] || [[ "$authority" == *@* ]]; then
+      printf '%s must be an absolute HTTPS URL without credentials or whitespace.\n' "$name" >&2
+      return 2
+    fi
+  done
+}
+
+# Parameter-expansion errors bypass ERR recovery; reject required inputs before any state change.
+validate_deploy_inputs || exit $?
+readonly PUBLIC_APP_URL STAGING_APP_URL TRANXIT_EGRESS_PROBE_URL
+
 MARKER_DIR="${TRANXIT_MARKER_DIR:-/opt/tranxit}"
 MARKER_FILE="$MARKER_DIR/last-$TARGET_ENV-green"
 MARKER_PREV_FILE="$MARKER_FILE.prev"
@@ -103,6 +125,35 @@ if [[ "$MARKER_DIR" != /* ]]; then
   echo "TRANXIT_MARKER_DIR must be an absolute path" >&2
   exit 2
 fi
+export TRANXIT_ADMISSION_DIR="${TRANXIT_ADMISSION_DIR:-$MARKER_DIR/admission-$TARGET_ENV}"
+if [[ "$TRANXIT_ADMISSION_DIR" != /* ]] || [ -L "$TRANXIT_ADMISSION_DIR" ]; then
+  echo "TRANXIT_ADMISSION_DIR must be an absolute, non-symlink directory." >&2
+  exit 2
+fi
+
+if [ "$TARGET_ENV" = "production" ]; then
+  for mailpit_var in MAILPIT_DOMAIN MAILPIT_BASIC_AUTH_USER MAILPIT_BASIC_AUTH_HASH TRANXIT_E2E_MAIL_INBOX; do
+    if [ -n "${!mailpit_var:-}" ]; then
+      echo "Refusing production deploy: $mailpit_var is set, but Mailpit is staging-only." >&2
+      exit 1
+    fi
+  done
+fi
+
+if { [ "${TRANXIT_DEPLOY_TEST_FORCE_SMOKE_FAILURE:-false}" = "true" ] ||
+     [ "${TRANXIT_DEPLOY_TEST_FORCE_POST_ADMISSION_FAILURE:-false}" = "true" ]; } &&
+   { [ "$TARGET_ENV" != "staging" ] ||
+     [ "${TRANXIT_ALLOW_FAILURE_INJECTION:-false}" != "true" ]; }; then
+  echo "Failure injection is allowed only on staging with TRANXIT_ALLOW_FAILURE_INJECTION=true." >&2
+  exit 1
+fi
+
+FRONTEND_DIR="${TRANXIT_FRONTEND_DIR:-$(cd "$BACKEND_REPO_DIR/../frontend" 2>/dev/null && pwd || true)}"
+if [ -z "$FRONTEND_DIR" ] || [ ! -d "$FRONTEND_DIR/.git" ]; then
+  echo "Frontend repo not found. Set TRANXIT_FRONTEND_DIR in $ENV_FILE." >&2
+  exit 1
+fi
+
 if ! command -v flock >/dev/null 2>&1; then
   echo "The deploy host must provide flock (util-linux)." >&2
   exit 1
@@ -127,36 +178,8 @@ if [ -e "$ADMISSION_STATE" ] || [ -L "$ADMISSION_STATE" ]; then
   echo "Fence and reconcile that release using the runbook; do not restore its pre-migration backup automatically." >&2
   exit 1
 fi
-export TRANXIT_ADMISSION_DIR="${TRANXIT_ADMISSION_DIR:-$MARKER_DIR/admission-$TARGET_ENV}"
-if [[ "$TRANXIT_ADMISSION_DIR" != /* ]] || [ -L "$TRANXIT_ADMISSION_DIR" ]; then
-  echo "TRANXIT_ADMISSION_DIR must be an absolute, non-symlink directory." >&2
-  exit 2
-fi
 mkdir -p "$TRANXIT_ADMISSION_DIR"
 ADMISSION_OPEN="$TRANXIT_ADMISSION_DIR/open"
-
-if [ "$TARGET_ENV" = "production" ]; then
-  for mailpit_var in MAILPIT_DOMAIN MAILPIT_BASIC_AUTH_USER MAILPIT_BASIC_AUTH_HASH TRANXIT_E2E_MAIL_INBOX; do
-    if [ -n "${!mailpit_var:-}" ]; then
-      echo "Refusing production deploy: $mailpit_var is set, but Mailpit is staging-only." >&2
-      exit 1
-    fi
-  done
-fi
-
-if { [ "${TRANXIT_DEPLOY_TEST_FORCE_SMOKE_FAILURE:-false}" = "true" ] ||
-     [ "${TRANXIT_DEPLOY_TEST_FORCE_POST_ADMISSION_FAILURE:-false}" = "true" ]; } &&
-   { [ "$TARGET_ENV" != "staging" ] ||
-     [ "${TRANXIT_ALLOW_FAILURE_INJECTION:-false}" != "true" ]; }; then
-  echo "Failure injection is allowed only on staging with TRANXIT_ALLOW_FAILURE_INJECTION=true." >&2
-  exit 1
-fi
-
-FRONTEND_DIR="${TRANXIT_FRONTEND_DIR:-$(cd "$BACKEND_REPO_DIR/../frontend" 2>/dev/null && pwd || true)}"
-if [ -z "$FRONTEND_DIR" ] || [ ! -d "$FRONTEND_DIR/.git" ]; then
-  echo "Frontend repo not found. Set TRANXIT_FRONTEND_DIR in $ENV_FILE." >&2
-  exit 1
-fi
 
 project_name="tranxit-$TARGET_ENV"
 compose_files=(
@@ -317,9 +340,9 @@ else
   echo "WARNING: first deploy explicitly acknowledged; automatic rollback is unavailable until this candidate becomes green."
 fi
 
-base_url="${PUBLIC_APP_URL:?Set PUBLIC_APP_URL}"
+base_url="$PUBLIC_APP_URL"
 if [ "$TARGET_ENV" = "staging" ]; then
-  base_url="${STAGING_APP_URL:?Set STAGING_APP_URL}"
+  base_url="$STAGING_APP_URL"
 fi
 
 candidate_backend_sha=""
@@ -355,7 +378,7 @@ wait_for_gateway() {
 run_release_smoke() {
   "$SCRIPT_DIR/verify-production-topology.sh" \
     --project-name "$project_name" \
-    --egress-url "${TRANXIT_EGRESS_PROBE_URL:?Set TRANXIT_EGRESS_PROBE_URL}" || return $?
+    --egress-url "$TRANXIT_EGRESS_PROBE_URL" || return $?
   export TRANXIT_SMOKE_DOCKER_NETWORK="${TRANXIT_SMOKE_DOCKER_NETWORK:-${project_name}_backend}"
   TRANXIT_SMOKE_PRIVATE_HTTP=true "$SCRIPT_DIR/smoke.sh" --base-url http://caddy:8082 || return $?
 }
