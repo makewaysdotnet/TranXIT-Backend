@@ -163,12 +163,50 @@ stateful_services=(sqlserver rabbitmq)
 
 start_application_stack() {
   if [ "$TARGET_ENV" = "staging" ]; then
-    compose up -d --no-deps --wait --wait-timeout 300 mailpit
+    compose up -d --no-deps --wait --wait-timeout 300 mailpit || return $?
   fi
-  compose up -d --no-deps --wait --wait-timeout 300 accountservice courierjobservice
-  compose up -d --no-deps --wait --wait-timeout 300 ocelotapigw
-  compose up -d --no-deps --wait --wait-timeout 300 frontend
-  compose up -d --no-deps --wait --wait-timeout 300 caddy
+  compose up -d --no-deps --wait --wait-timeout 300 accountservice courierjobservice || return $?
+  compose up -d --no-deps --wait --wait-timeout 300 ocelotapigw || return $?
+  compose up -d --no-deps --wait --wait-timeout 300 frontend || return $?
+  compose up -d --no-deps --wait --wait-timeout 300 caddy || return $?
+}
+
+stop_application_stack() {
+  local failed=0
+  local service container_ids container_id state
+
+  # Attempt every stop even if the edge stop fails; never infer runtime state from exit 0.
+  compose stop --timeout 30 caddy || failed=1
+  compose stop --timeout 30 frontend ocelotapigw accountservice courierjobservice || failed=1
+
+  for service in "${application_services[@]}"; do
+    if ! container_ids="$(docker ps --all --quiet \
+      --filter "label=com.docker.compose.project=$project_name" \
+      --filter "label=com.docker.compose.service=$service")"; then
+      echo "Cannot enumerate $service containers; stopped state is unverified." >&2
+      failed=1
+      continue
+    fi
+    for container_id in $container_ids; do
+      if ! state="$(docker inspect --format '{{.State.Status}}' "$container_id")"; then
+        echo "Cannot inspect $service container $container_id; stopped state is unverified." >&2
+        failed=1
+        continue
+      fi
+      case "$state" in
+        created|exited|dead) ;;
+        *)
+          echo "$service container $container_id is not confirmed stopped (state: $state)." >&2
+          failed=1
+          ;;
+      esac
+    done
+  done
+
+  if [ "$failed" -ne 0 ]; then
+    return 1
+  fi
+  echo "Application services are confirmed stopped."
 }
 
 marker_value() {
@@ -240,7 +278,7 @@ wait_for_gateway() {
       ready="true"
       break
     fi
-    sleep 5
+    sleep 5 || return $?
   done
   if [ "$ready" != "true" ]; then
     echo "Gateway did not become ready within 5 minutes." >&2
@@ -251,9 +289,9 @@ wait_for_gateway() {
 run_release_smoke() {
   "$SCRIPT_DIR/verify-production-topology.sh" \
     --project-name "$project_name" \
-    --egress-url "${TRANXIT_EGRESS_PROBE_URL:?Set TRANXIT_EGRESS_PROBE_URL}"
+    --egress-url "${TRANXIT_EGRESS_PROBE_URL:?Set TRANXIT_EGRESS_PROBE_URL}" || return $?
   export TRANXIT_SMOKE_DOCKER_NETWORK="${TRANXIT_SMOKE_DOCKER_NETWORK:-${project_name}_backend}"
-  "$SCRIPT_DIR/smoke.sh" --base-url "$base_url"
+  "$SCRIPT_DIR/smoke.sh" --base-url "$base_url" || return $?
 }
 
 database_migration_head() {
@@ -313,14 +351,15 @@ checkout_known_green() {
 }
 
 rollback_known_green() {
+  echo "Stopping and verifying candidate application services before recovery."
+  stop_application_stack || return $?
+
   if [ "$rollback_available" != "true" ]; then
     echo "Automatic rollback unavailable because no last-$TARGET_ENV-green marker exists." >&2
     return 1
   fi
 
   echo "Rolling back to known-green backend $green_backend_sha and frontend $green_frontend_sha"
-  echo "Stopping candidate application services before recovery."
-  compose stop "${application_services[@]}" || return 1
 
   if [ "$migration_started" = "true" ]; then
     if [ "$MIGRATION_POLICY" = "restore-required" ]; then
@@ -364,7 +403,12 @@ on_error() {
 
   if [ "$writers_stopped" = "true" ] || [ "$migration_started" = "true" ]; then
     if ! rollback_known_green; then
-      echo "AUTOMATIC ROLLBACK FAILED. Application writers remain stopped; use the runbook and paired backup manifest." >&2
+      echo "AUTOMATIC ROLLBACK FAILED. Stopping and verifying application services again." >&2
+      if stop_application_stack; then
+        echo "RECOVERY FENCED: application services are confirmed stopped; use the runbook and paired backup manifest." >&2
+      else
+        echo "UNSAFE/UNVERIFIED RECOVERY: application services may still be running. Block public traffic outside this stack and verify all writers are stopped before any manual restore or restart." >&2
+      fi
       [ -n "$backup_manifest" ] && echo "Backup manifest: $backup_manifest" >&2
     fi
   else
@@ -428,17 +472,17 @@ export TRANXIT_INTERNAL_API_URL="${TRANXIT_INTERNAL_API_URL:-http://ocelotapigw:
 echo "Resolved backend SHA: $candidate_backend_sha"
 echo "Resolved frontend SHA: $candidate_frontend_sha"
 echo "Validating compose config..."
-compose config --quiet
+compose config --quiet || on_error "$?" "$LINENO"
 
 echo "Building candidate images before downtime..."
-compose build caddy accountservice courierjobservice ocelotapigw frontend
+compose build caddy accountservice courierjobservice ocelotapigw frontend || on_error "$?" "$LINENO"
 
 echo "Stopping application writers for the pre-migration backup..."
 writers_stopped="true"
-compose stop "${application_services[@]}"
+stop_application_stack || on_error "$?" "$LINENO"
 
 echo "Starting data dependencies and waiting for health checks..."
-compose up -d --no-recreate --wait --wait-timeout 300 "${stateful_services[@]}"
+compose up -d --no-recreate --wait --wait-timeout 300 "${stateful_services[@]}" || on_error "$?" "$LINENO"
 
 database_presence="$(database_pair_presence)"
 case "$database_presence" in
@@ -450,7 +494,7 @@ case "$database_presence" in
       false
     fi
     echo "Creating the empty first-deploy database pair before the baseline backup..."
-    create_empty_database_pair
+    create_empty_database_pair || on_error "$?" "$LINENO"
     ;;
   *)
     echo "Database pair is inconsistent (Account|CourierJob = $database_presence); refusing to migrate or back up." >&2
@@ -475,23 +519,23 @@ courier_migration_before="$(marker_value courier_migration_head "$backup_manifes
 
 migration_started="true"
 echo "Applying AccountService migrations..."
-compose run --rm --no-deps accountservice dotnet AccountService.dll --apply-migrations
+compose run --rm --no-deps accountservice dotnet AccountService.dll --apply-migrations || on_error "$?" "$LINENO"
 
 echo "Bootstrapping the single Admin account..."
-compose run --rm --no-deps accountservice dotnet AccountService.dll --bootstrap-admin
+compose run --rm --no-deps accountservice dotnet AccountService.dll --bootstrap-admin || on_error "$?" "$LINENO"
 
 echo "Applying CourierJobService migrations..."
-compose run --rm --no-deps courierjobservice dotnet CourierJobService.dll --apply-migrations
+compose run --rm --no-deps courierjobservice dotnet CourierJobService.dll --apply-migrations || on_error "$?" "$LINENO"
 
 account_migration_after="$(database_migration_head Tranxit_Account)"
 courier_migration_after="$(database_migration_head Tranxit_CourierJob)"
 
 echo "Starting candidate stack..."
-start_application_stack
-wait_for_gateway
+start_application_stack || on_error "$?" "$LINENO"
+wait_for_gateway || on_error "$?" "$LINENO"
 
 echo "Running candidate smoke checks..."
-run_release_smoke
+run_release_smoke || on_error "$?" "$LINENO"
 
 if [ "${TRANXIT_DEPLOY_TEST_FORCE_SMOKE_FAILURE:-false}" = "true" ]; then
   echo "Injecting the requested staging smoke failure to exercise automatic rollback." >&2

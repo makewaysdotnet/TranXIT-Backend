@@ -3,10 +3,14 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-TMP_ROOT="$(mktemp -d)"
+TEMP_PARENT="$(cd "${TMPDIR:-/tmp}" && pwd -P)"
+TMP_ROOT="$(mktemp -d "$TEMP_PARENT/tranxit-deploy-safety.XXXXXXXX")"
 
 cleanup() {
-  rm -rf -- "$TMP_ROOT"
+  case "$TMP_ROOT" in
+    "$TEMP_PARENT"/tranxit-deploy-safety.*) rm -rf -- "$TMP_ROOT" ;;
+    *) echo "Refusing cleanup outside the test temp directory" >&2; exit 1 ;;
+  esac
 }
 trap cleanup EXIT
 
@@ -56,10 +60,16 @@ create_backend_release_repo() {
   printf '# test compose\n' > "$repo/TranXit/docker-compose.yml"
   printf '# test production override\n' > "$repo/TranXit/docker-compose.prod.yml"
   printf '# test staging override\n' > "$repo/TranXit/docker-compose.staging.yml"
-  printf '#!/usr/bin/env bash\nset -euo pipefail\n' \
-    > "$repo/TranXit/scripts/verify-production-topology.sh"
-  printf '#!/usr/bin/env bash\nset -euo pipefail\n' \
-    > "$repo/TranXit/scripts/smoke.sh"
+  cat > "$repo/TranXit/scripts/verify-production-topology.sh" <<'SH'
+#!/usr/bin/env bash
+echo topology >> "$TRANXIT_TEST_DOCKER_LOG"
+exit "${TRANXIT_TEST_TOPOLOGY_STATUS:-0}"
+SH
+  cat > "$repo/TranXit/scripts/smoke.sh" <<'SH'
+#!/usr/bin/env bash
+echo http-smoke >> "$TRANXIT_TEST_DOCKER_LOG"
+exit "${TRANXIT_TEST_HTTP_STATUS:-0}"
+SH
   chmod +x "$repo/TranXit/scripts/"*.sh
 
   printf 'green\n' > "$repo/release.txt"
@@ -106,6 +116,11 @@ create_mock_commands() {
   MOCK_BIN="$TMP_ROOT/bin"
   DOCKER_LOG="$TMP_ROOT/docker-events.log"
   mkdir -p "$MOCK_BIN"
+  export TRANXIT_TEST_STATE_DIR="$TMP_ROOT/service-state"
+  mkdir -p "$TRANXIT_TEST_STATE_DIR"
+  for service in caddy frontend ocelotapigw accountservice courierjobservice; do
+    echo exited > "$TRANXIT_TEST_STATE_DIR/$service"
+  done
   : > "$DOCKER_LOG"
 
   cat > "$MOCK_BIN/docker" <<'MOCK'
@@ -114,6 +129,40 @@ set -euo pipefail
 
 args="$*"
 printf 'command %s\n' "$args" >> "$TRANXIT_TEST_DOCKER_LOG"
+if [ "$1" = ps ]; then
+  for argument in "$@"; do
+    case "$argument" in
+      label=com.docker.compose.service=*)
+        service="${argument##*=}"
+        [ ! -f "$TRANXIT_TEST_STATE_DIR/$service" ] || echo "fake-$service"
+        ;;
+    esac
+  done
+  exit 0
+fi
+if [ "$1" = inspect ]; then
+  service="${*: -1}"
+  cat "$TRANXIT_TEST_STATE_DIR/${service#fake-}"
+  exit 0
+fi
+if [[ " $args " == *" up "* ]] || [[ " $args " == *" start "* ]] || [[ " $args " == *" stop "* ]]; then
+  for service in caddy frontend ocelotapigw accountservice courierjobservice; do
+    if [[ " $args " == *" $service "* ]]; then
+      if [[ " $args " == *" stop "* ]]; then
+        echo exited > "$TRANXIT_TEST_STATE_DIR/$service"
+      else
+        echo running > "$TRANXIT_TEST_STATE_DIR/$service"
+      fi
+    fi
+  done
+  if [ "${TRANXIT_TEST_FAIL_CANDIDATE_START:-false}" = true ] &&
+     [[ " $args " == *" up "*" accountservice courierjobservice "* ]] &&
+     [ ! -f "$TRANXIT_TEST_STATE_DIR/start-failure-injected" ]; then
+    touch "$TRANXIT_TEST_STATE_DIR/start-failure-injected"
+    echo startup-failure >> "$TRANXIT_TEST_DOCKER_LOG"
+    exit 47
+  fi
+fi
 if [[ "$args" == *"BACKUP DATABASE"* ]]; then
   echo "backup" >> "$TRANXIT_TEST_DOCKER_LOG"
   if [ "${TRANXIT_TEST_FAIL_BACKUP:-false}" = "true" ]; then
@@ -209,6 +258,7 @@ run_failed_deploy() {
     TRANXIT_TEST_FAIL_BACKUP="${TRANXIT_TEST_FAIL_BACKUP:-false}" \
     TRANXIT_TEST_FAIL_ROLLBACK_BUILD="${TRANXIT_TEST_FAIL_ROLLBACK_BUILD:-false}" \
     TRANXIT_TEST_FAIL_SECOND_RESTORE="${TRANXIT_TEST_FAIL_SECOND_RESTORE:-false}" \
+    TRANXIT_TEST_FAIL_CANDIDATE_START="${TRANXIT_TEST_FAIL_CANDIDATE_START:-false}" \
     TRANXIT_ENV_FILE="$ENV_FILE" \
     "$BACKEND_REPO/TranXit/scripts/deploy.sh" \
       --env staging \
@@ -343,6 +393,18 @@ fi
 echo "PASS T-NFR-9.DeployRollbackContract"
 
 : > "$DOCKER_LOG"
+write_env_file "$TMP_ROOT/backups-start-failure"
+# UC-NFR-9, F-02 - T-NFR-9.HelperFailurePropagation (actual deploy entry point)
+TRANXIT_TEST_FAIL_CANDIDATE_START=true \
+  run_failed_deploy expand-contract "$TMP_ROOT/start-failure.out"
+assert_rollback_result "$TMP_ROOT/start-failure.out" 47
+assert_contains "$TMP_ROOT/start-failure.out" "Candidate deploy failed at line"
+assert_contains "$DOCKER_LOG" startup-failure
+[ "$(grep -c '^http-smoke$' "$DOCKER_LOG")" -eq 1 ] ||
+  fail "Candidate helper failure was masked and reached HTTP smoke"
+echo "PASS T-NFR-9.HelperFailurePropagation (actual deploy entry point)"
+
+: > "$DOCKER_LOG"
 write_env_file "$TMP_ROOT/backups-restore"
 RESTORE_OUTPUT="$TMP_ROOT/restore-required.out"
 run_failed_deploy restore-required "$RESTORE_OUTPUT"
@@ -371,6 +433,11 @@ assert_status 1 "$DEPLOY_STATUS" "deploy with failed automatic rollback"
 cmp "$MARKER_SNAPSHOT" "$MARKER_FILE" >/dev/null ||
   fail "Known-green marker changed after automatic rollback failed"
 assert_contains "$ROLLBACK_FAILURE_OUTPUT" "AUTOMATIC ROLLBACK FAILED"
+assert_contains "$ROLLBACK_FAILURE_OUTPUT" "RECOVERY FENCED"
+for service in caddy frontend ocelotapigw accountservice courierjobservice; do
+  [ "$(cat "$TRANXIT_TEST_STATE_DIR/$service")" = exited ] ||
+    fail "Failed rollback left $service running"
+done
 if grep -F 'Known-green release restored successfully' "$ROLLBACK_FAILURE_OUTPUT" >/dev/null; then
   fail "A failed rollback was reported as successful"
 fi
@@ -519,3 +586,5 @@ if grep -F 'REPLACE' "$DOCKER_LOG" >/dev/null; then
 fi
 
 echo "PASS T-NFR-9.PairedRestoreContract"
+
+bash "$SCRIPT_DIR/deploy-fence-test.sh" --contract
