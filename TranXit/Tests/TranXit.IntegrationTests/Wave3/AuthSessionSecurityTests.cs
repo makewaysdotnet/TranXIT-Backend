@@ -166,11 +166,7 @@ public sealed class AuthSessionSecurityTests(SqlContainerFixture fixture)
 	}
 
 	private Task<HttpResponseMessage> RefreshAsync(string refreshToken) =>
-		AccountClient.SendAsync(
-			RequestWithRefreshCookie(
-				HttpMethod.Post,
-				"/api/refresh",
-				refreshToken));
+		AccountClient.PostAsJsonAsync("/api/refresh", new { refreshToken });
 
 	private static HttpRequestMessage RequestWithRefreshCookie(
 		HttpMethod method,

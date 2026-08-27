@@ -15,10 +15,9 @@ public sealed class RefreshEndpoint : CarterModule
 
 	public override void AddRoutes(IEndpointRouteBuilder app)
 	{
-		app.MapPost("/refresh", async (HttpContext httpContext, ISender sender) =>
+		app.MapPost("/refresh", async (RefreshAccessToken.Command? request, ISender sender) =>
 		{
-			var refreshToken = httpContext.Request.Cookies["tranxit_refresh"];
-			var result = await sender.Send(new RefreshAccessToken.Command(refreshToken));
+			var result = await sender.Send(request ?? new RefreshAccessToken.Command(null));
 			if (!result.isSuccess)
 			{
 				return Results.Json(result, statusCode: (int)HttpStatusCode.Unauthorized);
