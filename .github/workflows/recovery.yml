@@ -62,6 +62,7 @@ jobs:
           docker build -t tranxit-recovery-checks scripts/tests/recovery
           docker run --rm --network none --entrypoint bash tranxit-recovery-checks /harness/checkout-safety-test.sh attached
           docker run --rm --network none --entrypoint bash tranxit-recovery-checks /harness/checkout-safety-test.sh detached
+          docker run --rm --network none --entrypoint bash tranxit-recovery-checks /harness/checkout-safety-test.sh foreign-owner
 
       # Only private fixture clones and generated test credentials are used.
       - name: Run real recovery matrix and credibility check

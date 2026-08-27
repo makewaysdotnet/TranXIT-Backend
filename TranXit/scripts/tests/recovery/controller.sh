@@ -136,9 +136,13 @@ finish() {
 trap finish EXIT
 
 prepare_repo() {
-  local name="$1"
+  local name="$1" clone_status=0
   # Match a normal source checkout; the private credentials/backups keep the outer 0077 umask.
-  (umask 022; git -c safe.directory="/source/$name" -c core.autocrlf=false clone --no-hardlinks "/source/$name" "/work/$name") >/dev/null 2>&1
+  (umask 022; git -c safe.directory="/source/$name" -c safe.directory="/source/$name/.git" -c core.autocrlf=false clone --no-hardlinks "/source/$name" "/work/$name") > "/work/state/clone-$name.log" 2>&1 || clone_status=$?
+  if [ "$clone_status" -ne 0 ]; then
+    sanitize < "/work/state/clone-$name.log" | tee "/work/public-results/clone-$name.log" >&2
+    return "$clone_status"
+  fi
   printf '%s=%s\n' "$name" "$(git -C "/work/$name" rev-parse HEAD)" >> /work/public-results/source-refs.txt
   git -C "/work/$name" config user.name 'Recovery Fixture'
   git -C "/work/$name" config user.email 'recovery@example.test'

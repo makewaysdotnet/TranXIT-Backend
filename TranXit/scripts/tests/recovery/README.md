@@ -18,11 +18,13 @@ These three `T-NFR-9.RuntimeIsolationGuards` tests use a CLI double to prove tha
 remote contexts and a pre-existing namespace are rejected before cleanup can
 touch them. They are separate from the real-stack matrix below.
 
-`checkout-safety-test.sh attached` and `checkout-safety-test.sh detached` run
+`checkout-safety-test.sh attached`, `detached` and `foreign-owner` run
 inside an empty controller-image container, with no Docker socket and
 `--network none`. They use real Git repositories to check PR-style detached
-commits and prove both source checkouts remain unchanged. Override the image
+commits, runner-owned mounts and preservation of both source checkouts. Override the image
 entrypoint with `bash` and pass `/harness/checkout-safety-test.sh` plus the mode.
+Local cloning trusts only each explicit read-only source root and its `.git`
+directory. Failed clone diagnostics are sanitized and retained for CI artifacts.
 
 ## Isolation and fidelity
 

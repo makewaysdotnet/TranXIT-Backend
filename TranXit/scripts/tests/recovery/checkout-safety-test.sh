@@ -7,7 +7,7 @@ for target in /source/backend /source/frontend /work; do
   [ ! -e "$target" ] || { echo "Refusing existing fixture path: $target" >&2; exit 78; }
 done
 mode="${1:-detached}"
-[[ "$mode" = attached || "$mode" = detached ]] || exit 78
+[[ "$mode" = attached || "$mode" = detached || "$mode" = foreign-owner ]] || exit 78
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null
 export F01_PROJECT=tranxit-f01-test-0000000000000000
 
@@ -35,11 +35,14 @@ for name in backend frontend; do
 done
 backend_before="$(git -C /source/backend rev-parse HEAD)"
 frontend_before="$(git -C /source/frontend rev-parse HEAD)"
+if [ "$mode" = foreign-owner ]; then
+  chown -R 1001:1001 /source/backend /source/frontend
+fi
 
 bash /harness/controller.sh --prepare-repos
 . /work/refs.env
-[ "$(git -C /source/backend rev-parse HEAD)" = "$backend_before" ]
-[ "$(git -C /source/frontend rev-parse HEAD)" = "$frontend_before" ]
+[ "$(git -c safe.directory=/source/backend -C /source/backend rev-parse HEAD)" = "$backend_before" ]
+[ "$(git -c safe.directory=/source/frontend -C /source/frontend rev-parse HEAD)" = "$frontend_before" ]
 [ "$(git -C /work/backend rev-parse "$GREEN_BACKEND^")" = "$backend_before" ]
 [ "$(git -C /work/frontend rev-parse "$GREEN_FRONTEND^")" = "$frontend_before" ]
 
@@ -49,7 +52,7 @@ for name in backend frontend; do
       echo 'Source checkout was changed' >&2; exit 1
     fi
   else
-    [ "$(git -C "/source/$name" symbolic-ref --short HEAD)" = main ]
+    [ "$(git -c safe.directory="/source/$name" -C "/source/$name" symbolic-ref --short HEAD)" = main ]
   fi
   [ "$(git -C "/work/$name" symbolic-ref --short HEAD)" = main ]
   [ "$(git -C "/work/$name" rev-parse HEAD)" = "$(git --git-dir="/work/origins/$name.git" rev-parse main)" ]
