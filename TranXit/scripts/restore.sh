@@ -310,6 +310,14 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Docker creates the scratch volume as root; SQL Server continues running as mssql.
+compose exec -T --user root sqlserver /bin/bash -lc '
+  set -euo pipefail
+  test ! -L /var/opt/mssql/backup
+  install -d -o mssql -g mssql -m 700 /var/opt/mssql/backup
+'
+compose exec -T sqlserver /bin/bash -lc 'test -w /var/opt/mssql/backup'
+
 sql_escape() {
   printf '%s' "$1" | sed "s/'/''/g"
 }
@@ -325,6 +333,14 @@ prepare_backup() {
   gzip -dc "$compressed_file" > "$tmp_bak"
   compose cp "$tmp_bak" "sqlserver:$container_file"
   container_files+=("$container_file")
+
+  # docker cp preserves restrictive host modes but assigns root ownership by default.
+  compose exec -T --user root -e RESTORE_FILE="$container_file" sqlserver /bin/bash -lc '
+    set -euo pipefail
+    test -f "$RESTORE_FILE" && test ! -L "$RESTORE_FILE"
+    chown mssql:mssql -- "$RESTORE_FILE"
+    chmod 600 -- "$RESTORE_FILE"
+  '
 
   compose exec -T \
     -e RESTORE_FILE="$container_file" \

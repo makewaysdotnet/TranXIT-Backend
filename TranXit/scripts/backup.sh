@@ -181,6 +181,14 @@ fi
 mkdir -p "$backup_set_dir"
 chmod 700 "$BACKUP_DIR" "$BACKUP_DIR/$TARGET_ENV" "$backup_set_dir"
 
+# A fresh named volume is root-owned; only this scratch directory needs initialization.
+compose exec -T --user root sqlserver /bin/bash -lc '
+  set -euo pipefail
+  test ! -L /var/opt/mssql/backup
+  install -d -o mssql -g mssql -m 700 /var/opt/mssql/backup
+'
+compose exec -T sqlserver /bin/bash -lc 'test -w /var/opt/mssql/backup'
+
 database_migration_head() {
   local database="$1"
   compose exec -T -e DB_NAME="$database" sqlserver /bin/bash -lc '

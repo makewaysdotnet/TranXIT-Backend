@@ -166,6 +166,11 @@ if [[ " $args " == *" up "* ]] || [[ " $args " == *" start "* ]] || [[ " $args "
     exit 47
   fi
 fi
+if [[ "$args" == *"install -d -o mssql -g mssql -m 700 /var/opt/mssql/backup"* ]] &&
+   [ "${TRANXIT_TEST_FAIL_STORAGE_PREP:-false}" = true ]; then
+  echo storage-preparation-failure >> "$TRANXIT_TEST_DOCKER_LOG"
+  exit 49
+fi
 if [[ "$args" == *"BACKUP DATABASE"* ]]; then
   echo "backup" >> "$TRANXIT_TEST_DOCKER_LOG"
   if [ "${TRANXIT_TEST_FAIL_BACKUP:-false}" = "true" ]; then
@@ -446,6 +451,18 @@ assert_contains "$DOCKER_LOG" "rm -f --"
 if grep -Fx 'migration' "$DOCKER_LOG" >/dev/null; then
   fail "Migration ran after the paired backup failed"
 fi
+
+# UC-NFR-9 - T-NFR-9.BackupStorageFailure
+: > "$DOCKER_LOG"
+write_env_file "$TMP_ROOT/backups-storage-failure"
+STORAGE_FAILURE_OUTPUT="$TMP_ROOT/storage-failure.out"
+TRANXIT_TEST_FAIL_STORAGE_PREP=true run_failed_deploy expand-contract "$STORAGE_FAILURE_OUTPUT"
+assert_rollback_result "$STORAGE_FAILURE_OUTPUT" 49
+assert_contains "$DOCKER_LOG" storage-preparation-failure
+if grep -E '^(backup|migration)$' "$DOCKER_LOG" >/dev/null; then
+  fail "Backup or migration ran after storage preparation failed"
+fi
+echo "PASS T-NFR-9.BackupStorageFailure"
 
 : > "$DOCKER_LOG"
 write_env_file "$TMP_ROOT/backups-rollback-failure"
