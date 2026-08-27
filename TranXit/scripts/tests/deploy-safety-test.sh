@@ -68,6 +68,9 @@ SH
   cat > "$repo/TranXit/scripts/smoke.sh" <<'SH'
 #!/usr/bin/env bash
 echo http-smoke >> "$TRANXIT_TEST_DOCKER_LOG"
+[ "${TRANXIT_SMOKE_PRIVATE_HTTP:-}" = true ] || exit 71
+[ "$*" = "--base-url http://caddy:8082" ] || exit 72
+[ ! -e "$TRANXIT_ADMISSION_DIR/open" ] || exit 73
 exit "${TRANXIT_TEST_HTTP_STATUS:-0}"
 SH
   chmod +x "$repo/TranXit/scripts/"*.sh
@@ -245,7 +248,8 @@ PUBLIC_APP_URL=https://production.example.invalid
 STAGING_APP_URL=https://staging.example.invalid
 TRANXIT_EGRESS_PROBE_URL=https://probe.example.invalid
 TRANXIT_ALLOW_FAILURE_INJECTION=true
-TRANXIT_DEPLOY_TEST_FORCE_SMOKE_FAILURE=true
+TRANXIT_DEPLOY_TEST_FORCE_SMOKE_FAILURE=${TRANXIT_TEST_FORCE_SMOKE_FAILURE:-true}
+TRANXIT_DEPLOY_TEST_FORCE_POST_ADMISSION_FAILURE=${TRANXIT_TEST_POST_ADMISSION_FAILURE:-false}
 ENV
 }
 
@@ -304,13 +308,14 @@ MARKER_FILE="$MARKER_DIR/last-staging-green"
 MARKER_SNAPSHOT="$TMP_ROOT/marker.before"
 mkdir -p "$MARKER_DIR"
 cat > "$MARKER_FILE" <<MARKER
-format_version=2
+format_version=3
 environment=staging
 backend_sha=$GREEN_BACKEND_SHA
 frontend_ref=$GREEN_FRONTEND_SHA
 frontend_sha=$GREEN_FRONTEND_SHA
 image_tag=${GREEN_BACKEND_SHA:0:12}
 migration_policy=expand-contract
+admission_policy=private-smoke-v1
 pre_migration_backup_manifest=
 account_migration_before=none
 account_migration_after=none
@@ -329,12 +334,27 @@ PATH="$MOCK_BIN:$PATH" \
     --env production \
     --sha "$CANDIDATE_BACKEND_SHA" \
     --frontend-ref "$CANDIDATE_FRONTEND_SHA" \
-    --migration-policy expand-contract >/dev/null 2>&1
+    --migration-policy expand-contract >"$TMP_ROOT/production-injection.out" 2>&1
 PRODUCTION_INJECTION_STATUS=$?
 set -e
 assert_status 1 "$PRODUCTION_INJECTION_STATUS" "production failure-injection guard"
+assert_contains "$TMP_ROOT/production-injection.out" "Failure injection is allowed only on staging"
 [ ! -s "$DOCKER_LOG" ] ||
   fail "Production failure injection reached Docker instead of failing fast"
+
+TRANXIT_TEST_FORCE_SMOKE_FAILURE=false TRANXIT_TEST_POST_ADMISSION_FAILURE=true \
+  write_env_file "$TMP_ROOT/backups-production-guard"
+set +e
+PATH="$MOCK_BIN:$PATH" TRANXIT_TEST_DOCKER_LOG="$DOCKER_LOG" TRANXIT_ENV_FILE="$ENV_FILE" \
+  "$BACKEND_REPO/TranXit/scripts/deploy.sh" --env production --sha "$CANDIDATE_BACKEND_SHA" \
+    --frontend-ref "$CANDIDATE_FRONTEND_SHA" --migration-policy expand-contract \
+    >"$TMP_ROOT/production-post-admission-injection.out" 2>&1
+PRODUCTION_INJECTION_STATUS=$?
+set -e
+assert_status 1 "$PRODUCTION_INJECTION_STATUS" "production post-admission injection guard"
+assert_contains "$TMP_ROOT/production-post-admission-injection.out" "Failure injection is allowed only on staging"
+[ ! -s "$DOCKER_LOG" ] || fail "Production post-admission injection reached Docker"
+write_env_file "$TMP_ROOT/backups-expand"
 
 : > "$DOCKER_LOG"
 FIRST_MARKER_DIR="$TMP_ROOT/first-deploy-markers"
@@ -363,6 +383,9 @@ assert_contains "$DOCKER_LOG" "CREATE DATABASE [Tranxit_Account]"
 assert_contains "$DOCKER_LOG" "CREATE DATABASE [Tranxit_CourierJob]"
 assert_contains "$DOCKER_LOG" "up -d --no-deps --wait --wait-timeout 300 mailpit"
 assert_contains "$FIRST_MARKER_DIR/last-staging-green" "backend_sha=$CANDIDATE_BACKEND_SHA"
+assert_contains "$FIRST_MARKER_DIR/last-staging-green" "admission_policy=private-smoke-v1"
+[ -f "$FIRST_MARKER_DIR/admission-staging/open" ] || fail "Successful first deploy did not admit traffic"
+[ ! -e "$FIRST_MARKER_DIR/deploy-staging-admitted" ] || fail "Successful first deploy left an unresolved admission record"
 
 : > "$DOCKER_LOG"
 mv "$MARKER_FILE" "$MARKER_FILE.hidden"
@@ -441,6 +464,39 @@ done
 if grep -F 'Known-green release restored successfully' "$ROLLBACK_FAILURE_OUTPUT" >/dev/null; then
   fail "A failed rollback was reported as successful"
 fi
+
+# UC-NFR-9, F-01 - T-NFR-9.PostAdmissionRecoveryContract (actual deploy entry point)
+for policy in restore-required expand-contract; do
+  : > "$DOCKER_LOG"
+  TRANXIT_TEST_FORCE_SMOKE_FAILURE=false TRANXIT_TEST_POST_ADMISSION_FAILURE=true \
+    write_env_file "$TMP_ROOT/backups-post-admission-$policy"
+  run_failed_deploy "$policy" "$TMP_ROOT/post-admission-$policy.out"
+  assert_status 1 "$DEPLOY_STATUS" "post-admission $policy failure"
+  assert_contains "$TMP_ROOT/post-admission-$policy.out" "Public admission is open"
+  if grep -F 'restore-sql ' "$DOCKER_LOG" >/dev/null; then
+    fail "Post-admission failure restored an earlier database backup"
+  fi
+  cmp "$MARKER_SNAPSHOT" "$MARKER_FILE" >/dev/null || fail "Post-admission failure advanced the marker"
+  if [ "$policy" = restore-required ]; then
+    assert_contains "$TMP_ROOT/post-admission-$policy.out" "AUTOMATIC RESTORE REFUSED"
+    [ -f "$MARKER_DIR/deploy-staging-admitted" ] || fail "Post-admission restore boundary was lost"
+    [ ! -e "$MARKER_DIR/admission-staging/open" ] || fail "Unsafe recovery left admission open"
+    for service in caddy frontend ocelotapigw accountservice courierjobservice; do
+      [ "$(cat "$TRANXIT_TEST_STATE_DIR/$service")" = exited ] || fail "Unsafe recovery left $service running"
+    done
+    : > "$DOCKER_LOG"
+    run_failed_deploy "$policy" "$TMP_ROOT/post-admission-restart-guard.out"
+    assert_status 1 "$DEPLOY_STATUS" "unresolved admission process restart"
+    assert_contains "$TMP_ROOT/post-admission-restart-guard.out" "unresolved public admission"
+    [ ! -s "$DOCKER_LOG" ] || fail "Unresolved admission reached Docker on process restart"
+    rm -- "$MARKER_DIR/deploy-staging-admitted"
+  else
+    assert_rollback_result "$TMP_ROOT/post-admission-$policy.out"
+    [ -f "$MARKER_DIR/admission-staging/open" ] || fail "Code-only rollback did not reopen verified release"
+    [ ! -e "$MARKER_DIR/deploy-staging-admitted" ] || fail "Code-only rollback left unresolved admission"
+  fi
+done
+echo "PASS T-NFR-9.PostAdmissionRecoveryContract (restore refusal, data-preserving code recovery, process restart guard)"
 
 MANIFEST="$(find "$TMP_ROOT/backups-expand" -name manifest.env -print -quit)"
 [ -n "$MANIFEST" ] || fail "Deploy did not produce a paired backup manifest"
@@ -588,3 +644,4 @@ fi
 echo "PASS T-NFR-9.PairedRestoreContract"
 
 bash "$SCRIPT_DIR/deploy-fence-test.sh" --contract
+bash "$SCRIPT_DIR/deploy-fence-test.sh" --admission

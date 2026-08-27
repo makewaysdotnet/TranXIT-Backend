@@ -53,7 +53,8 @@ expect_status() {
 }
 
 # Load the real helper bodies without executing deploy.sh's checkout/deployment entry point.
-for name in start_application_stack stop_application_stack run_release_smoke rollback_known_green on_error; do
+for name in close_public_admission record_public_admission open_public_admission complete_public_admission \
+  fence_application_stack start_application_stack stop_application_stack run_release_smoke rollback_known_green on_error; do
   definition="$(awk -v name="$name" '
     $0 == name "() {" { selected=1 }
     selected { print }
@@ -83,6 +84,11 @@ cat > "$SCRIPT_DIR/smoke.sh" <<'SH'
 echo http-smoke >> "$TRANXIT_FENCE_EVENTS"
 exit "${TRANXIT_FENCE_HTTP_STATUS:-0}"
 SH
+cat > "$SCRIPT_DIR/restore.sh" <<'SH'
+#!/usr/bin/env bash
+echo restore >> "$TRANXIT_FENCE_EVENTS"
+cp "$TRANXIT_FENCE_BASELINE" "$TRANXIT_FENCE_WRITES"
+SH
 chmod +x "$SCRIPT_DIR/"*.sh
 
 checkout_known_green() { echo checkout-green >> "$TRANXIT_FENCE_EVENTS"; }
@@ -104,10 +110,22 @@ reset_case() {
   rollback_available=true
   writers_stopped=true
   migration_started=false
+  admission_may_have_opened=false
+  marker_commit_started=false
   MIGRATION_POLICY=expand-contract
   backup_manifest=""
   green_backend_sha=1111111111111111111111111111111111111111
   green_frontend_sha=2222222222222222222222222222222222222222
+  green_admission_policy=private-smoke-v1
+  MARKER_DIR="$TMP_ROOT"
+  TRANXIT_ADMISSION_DIR="$TMP_ROOT/admission"
+  ADMISSION_OPEN="$TRANXIT_ADMISSION_DIR/open"
+  ADMISSION_STATE="$TMP_ROOT/deploy-staging-admitted"
+  mkdir -p "$TRANXIT_ADMISSION_DIR"
+  rm -f -- "$ADMISSION_OPEN" "$ADMISSION_STATE"
+  export TRANXIT_FENCE_WRITES="$TMP_ROOT/writes" TRANXIT_FENCE_BASELINE="$TMP_ROOT/baseline"
+  printf 'before-deploy\n' > "$TRANXIT_FENCE_WRITES"
+  cp "$TRANXIT_FENCE_WRITES" "$TRANXIT_FENCE_BASELINE"
   MARKER_FILE="$TMP_ROOT/last-staging-green"
   printf 'backend_sha=%s\nfrontend_sha=%s\n' "$green_backend_sha" "$green_frontend_sha" > "$MARKER_FILE"
   cp "$MARKER_FILE" "$TMP_ROOT/marker.before"
@@ -252,6 +270,116 @@ stop_failure_reported_unsafe() {
   echo "PASS T-NFR-9.StopFailureReportedUnsafe (6 failure/state scenarios)"
 }
 
+model_public_write() {
+  local phase="$1"
+  if [ -f "$ADMISSION_OPEN" ] && [ "$(cat "$TMP_ROOT/states/caddy")" = running ]; then
+    printf '%s\n' "$phase" >> "$TRANXIT_FENCE_WRITES"
+    echo "admitted $phase" >> "$TRANXIT_FENCE_EVENTS"
+    return 0
+  fi
+  echo "refused $phase" >> "$TRANXIT_FENCE_EVENTS"
+  return 60
+}
+
+write_safe_admission() {
+  # UC-NFR-9, F-01 - T-NFR-9.PrivateAdmissionAndWritePreservation
+  local policy
+  for policy in restore-required expand-contract; do
+    reset_case
+    MIGRATION_POLICY="$policy"
+    migration_started=true
+    backup_manifest="$TMP_ROOT/paired-manifest"
+    fence_application_stack
+    expect_status 60 model_public_write backup
+    expect_status 60 model_public_write migration
+    start_application_stack
+    expect_status 60 model_public_write candidate-started
+    run_release_smoke
+    expect_status 60 model_public_write smoke-complete
+    cmp "$TRANXIT_FENCE_BASELINE" "$TRANXIT_FENCE_WRITES" || fail "Closed candidate accepted a write"
+    record_public_admission candidate-backend candidate-frontend
+    [ -f "$ADMISSION_STATE" ] || fail "Admission was not persisted before opening"
+    open_public_admission
+    model_public_write acknowledged-after-open
+    expect_status 49 recover
+    assert_contains "$TRANXIT_FENCE_WRITES" acknowledged-after-open
+    assert_absent "$TRANXIT_FENCE_EVENTS" restore
+    cmp "$TMP_ROOT/marker.before" "$MARKER_FILE" || fail "Post-admission failure advanced marker"
+    if [ "$policy" = restore-required ]; then
+      assert_stopped_model
+      [ -f "$ADMISSION_STATE" ] || fail "Unsafe restore boundary was forgotten"
+      assert_contains "$TMP_ROOT/recovery.log" "AUTOMATIC RESTORE REFUSED"
+      expect_status 60 model_public_write after-failure
+    else
+      [ -f "$ADMISSION_OPEN" ] || fail "Known-green code recovery did not reopen after private smoke"
+      [ ! -e "$ADMISSION_STATE" ] || fail "Successful code-only recovery left a pending boundary"
+      model_public_write after-code-recovery
+    fi
+    scenario_count=$((scenario_count + 1))
+  done
+
+  reset_case
+  MIGRATION_POLICY=restore-required
+  migration_started=true
+  backup_manifest="$TMP_ROOT/paired-manifest"
+  expect_status 49 recover
+  assert_contains "$TRANXIT_FENCE_EVENTS" restore
+  cmp "$TRANXIT_FENCE_BASELINE" "$TRANXIT_FENCE_WRITES" || fail "Pre-admission recovery changed baseline data"
+  [ -f "$ADMISSION_OPEN" ] || fail "Pre-admission restore did not reopen known-green after smoke"
+  scenario_count=$((scenario_count + 1))
+  echo "PASS T-NFR-9.PrivateAdmissionAndWritePreservation (3 pre/post-admission recovery scenarios)"
+}
+
+admission_failure_guards() {
+  # UC-NFR-9, F-01 - T-NFR-9.AdmissionFailureGuards
+  reset_case
+  expect_status 1 open_public_admission
+  [ ! -e "$ADMISSION_OPEN" ] || fail "Gate opened without a persistent boundary"
+  scenario_count=$((scenario_count + 1))
+
+  reset_case
+  MIGRATION_POLICY=restore-required
+  migration_started=true
+  record_public_admission candidate-backend candidate-frontend
+  mv() {
+    if [ "${*: -1}" = "$ADMISSION_OPEN" ]; then return 55; fi
+    command mv "$@"
+  }
+  expect_status 55 open_public_admission
+  unset -f mv
+  expect_status 49 recover
+  assert_stopped_model
+  assert_absent "$TRANXIT_FENCE_EVENTS" restore
+  assert_contains "$TMP_ROOT/recovery.log" "AUTOMATIC RESTORE REFUSED"
+  scenario_count=$((scenario_count + 1))
+
+  reset_case
+  mkdir "$ADMISSION_OPEN"
+  expect_status 49 recover
+  assert_stopped_model
+  assert_contains "$TMP_ROOT/recovery.log" "UNSAFE/UNVERIFIED RECOVERY"
+  assert_absent "$TRANXIT_FENCE_EVENTS" "compose up"
+  rmdir "$ADMISSION_OPEN"
+  scenario_count=$((scenario_count + 1))
+
+  reset_case
+  green_admission_policy=""
+  expect_status 49 recover
+  assert_stopped_model
+  assert_absent "$TRANXIT_FENCE_EVENTS" "compose up"
+  assert_contains "$TMP_ROOT/recovery.log" "predates the private admission gate"
+  scenario_count=$((scenario_count + 1))
+
+  reset_case
+  marker_commit_started=true
+  expect_status 49 recover
+  assert_stopped_model
+  assert_absent "$TRANXIT_FENCE_EVENTS" checkout-green
+  assert_contains "$TMP_ROOT/recovery.log" "Release-marker finalization is incomplete"
+  scenario_count=$((scenario_count + 1))
+  echo "PASS T-NFR-9.AdmissionFailureGuards (5 fail-closed scenarios)"
+}
+
 runtime_recovery_fence() {
   # UC-NFR-9, F-02 - T-NFR-9.RuntimeRecoveryFence
   local endpoint address scenario service container state status
@@ -389,6 +517,11 @@ case "$MODE" in
     echo "Contract summary: 4 groups, $scenario_count scenarios passed"
     ;;
   --runtime) runtime_recovery_fence ;;
+  --admission)
+    write_safe_admission
+    admission_failure_guards
+    echo "Admission summary: 2 groups, $scenario_count scenarios passed"
+    ;;
   --credibility) credibility_check ;;
-  *) echo "Usage: $0 [--contract|--runtime|--credibility]" >&2; exit 2 ;;
+  *) echo "Usage: $0 [--contract|--runtime|--admission|--credibility]" >&2; exit 2 ;;
 esac

@@ -191,6 +191,7 @@ set -a
 # shellcheck source=/dev/null
 . "$ENV_FILE"
 set +a
+export TRANXIT_ADMISSION_DIR="${TRANXIT_ADMISSION_DIR:-${TRANXIT_MARKER_DIR:-/opt/tranxit}/admission-$TARGET_ENV}"
 
 marker_dir="${TRANXIT_MARKER_DIR:-/opt/tranxit}"
 if [[ "$marker_dir" != /* ]]; then

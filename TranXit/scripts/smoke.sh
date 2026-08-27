@@ -30,6 +30,14 @@ if [ -z "$BASE_URL" ]; then
 fi
 
 BASE_URL="${BASE_URL%/}"
+SMOKE_BODY="$(mktemp "${TMPDIR:-/tmp}/tranxit-smoke.XXXXXXXX")"
+trap 'rm -f -- "$SMOKE_BODY"' EXIT
+
+http_command=(curl)
+if [ "${TRANXIT_SMOKE_PRIVATE_HTTP:-false}" = true ]; then
+  : "${TRANXIT_SMOKE_DOCKER_NETWORK:?Set TRANXIT_SMOKE_DOCKER_NETWORK for private smoke}"
+  http_command=(docker run --rm --network "$TRANXIT_SMOKE_DOCKER_NETWORK" curlimages/curl:8.13.0)
+fi
 
 request_code() {
   local method="$1"
@@ -38,16 +46,17 @@ request_code() {
   local output
 
   if [ -n "$body" ]; then
-    output="$(curl -sS -o /tmp/tranxit-smoke-body.json -w "%{http_code}" \
+    output="$("${http_command[@]}" -sS --connect-timeout 10 --max-time 30 -w $'\n%{http_code}' \
       -X "$method" "$BASE_URL$path" \
       -H "Content-Type: application/json" \
-      --data "$body")"
+      --data "$body")" || return $?
   else
-    output="$(curl -sS -o /tmp/tranxit-smoke-body.json -w "%{http_code}" \
-      -X "$method" "$BASE_URL$path")"
+    output="$("${http_command[@]}" -sS --connect-timeout 10 --max-time 30 -w $'\n%{http_code}' \
+      -X "$method" "$BASE_URL$path")" || return $?
   fi
 
-  echo "$output"
+  printf '%s\n' "${output%$'\n'*}" > "$SMOKE_BODY"
+  printf '%s\n' "${output##*$'\n'}"
 }
 
 expect_code() {
@@ -58,7 +67,7 @@ expect_code() {
   if [ "$actual" != "$expected" ]; then
     echo "FAIL: $description expected HTTP $expected but got $actual" >&2
     echo "Response body:" >&2
-    cat /tmp/tranxit-smoke-body.json >&2 || true
+    cat "$SMOKE_BODY" >&2 || true
     exit 1
   fi
 
@@ -70,11 +79,14 @@ expect_code "public roles endpoint" "200" "$roles_code"
 
 admin_email="smoke.admin.$(date +%s).$RANDOM@tranxit.local"
 admin_body="{\"username\":\"Smoke Admin\",\"email\":\"$admin_email\",\"phone\":\"+920000000000\",\"role\":\"Admin\",\"password\":\"Password1!\",\"confirmPassword\":\"Password1!\"}"
-admin_code="$(request_code POST /api/register "$admin_body")"
+admin_code="$(request_code POST /api/auth/register "$admin_body")"
 expect_code "Admin self-register is blocked" "400" "$admin_code"
 
-protected_code="$(request_code GET /api/jobs)"
-expect_code "protected jobs route without token" "401" "$protected_code"
+protected_code="$(request_code POST /api/jobs '{}')"
+expect_code "protected jobs route without session" "401" "$protected_code"
+
+raw_refresh_code="$(request_code POST /api/refresh '{}')"
+expect_code "raw refresh alias is not public" "404" "$raw_refresh_code"
 
 if [ -n "${SMOKE_LOGIN_EMAIL:-}" ] && [ -n "${SMOKE_LOGIN_PASSWORD:-}" ]; then
   login_email="$SMOKE_LOGIN_EMAIL"
@@ -85,14 +97,14 @@ else
   login_email="smoke.customer.$(date +%s).$RANDOM@tranxit.local"
   login_password="Password1!"
   customer_body="{\"username\":\"Smoke Customer\",\"email\":\"$login_email\",\"phone\":\"+920000000001\",\"role\":\"Customer\",\"password\":\"$login_password\",\"confirmPassword\":\"$login_password\"}"
-  customer_code="$(request_code POST /api/register "$customer_body")"
+  customer_code="$(request_code POST /api/auth/register "$customer_body")"
   expect_code "temporary Customer self-register" "200" "$customer_code"
   login_expected="400"
   login_description="unverified Customer login is blocked"
 fi
 
 login_body="{\"email\":\"$login_email\",\"password\":\"$login_password\"}"
-login_code="$(request_code POST /api/login "$login_body")"
+login_code="$(request_code POST /api/auth/login "$login_body")"
 expect_code "$login_description" "$login_expected" "$login_code"
 
 if [ -n "${TRANXIT_E2E_MAIL_INBOX:-}" ]; then
