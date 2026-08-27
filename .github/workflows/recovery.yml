@@ -1,0 +1,77 @@
+name: Local Recovery Matrix
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - 'codex/**'
+  workflow_dispatch:
+    inputs:
+      frontend_ref:
+        description: Frontend branch or SHA to verify with the backend
+        default: main
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: recovery-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  recovery:
+    name: disposable recovery matrix
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: TranXIT-Backend/TranXit
+    steps:
+      - name: Checkout backend
+        uses: actions/checkout@v4
+        with:
+          path: TranXIT-Backend
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout frontend
+        uses: actions/checkout@v4
+        with:
+          repository: makewaysdotnet/TranXit-Frontend
+          ref: ${{ inputs.frontend_ref || 'main' }}
+          path: TranXit-Frontend
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Verify local Docker
+        run: docker info
+
+      - name: Check test-wrapper isolation
+        run: node --test scripts/tests/recovery/runtime.safety.test.mjs
+
+      - name: Check fixture repository preparation
+        run: |
+          docker build -t tranxit-recovery-checks scripts/tests/recovery
+          docker run --rm --network none --entrypoint bash tranxit-recovery-checks /harness/checkout-safety-test.sh attached
+          docker run --rm --network none --entrypoint bash tranxit-recovery-checks /harness/checkout-safety-test.sh detached
+
+      # Only private fixture clones and generated test credentials are used.
+      - name: Run real recovery matrix and credibility check
+        run: node scripts/tests/recovery/runtime.mjs
+
+      - name: Upload sanitized recovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: recovery-evidence-${{ github.run_attempt }}
+          path: TranXIT-Backend/TranXit/Tests/TranXit.IntegrationTests/TestResults/tranxit-f01-test-*/
+          if-no-files-found: warn
+          retention-days: 14
