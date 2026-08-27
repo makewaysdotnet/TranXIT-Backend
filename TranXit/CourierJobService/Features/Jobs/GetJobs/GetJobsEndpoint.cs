@@ -84,10 +84,9 @@ public class GetJob
 				Status = status.Item2,
 				StatusId = status.Item1,
 				JobNumber = job.JobNumber,
-				MaxBid = job.Biddings.Any() ? job.Biddings.Max(y => y.TotalAmount) : 0,
-				MinBid = job.Biddings.Any() ? job.Biddings.Min(y => y.TotalAmount) : 0,
-				YourBid = job.Biddings.Any() ? 
-					job.Biddings.FirstOrDefault(y => y.UserId == userId)?.TotalAmount : 0,
+				MaxBid = job.Biddings.Any() ? job.Biddings.Max(y => y.TotalAmount) : null,
+				MinBid = job.Biddings.Any() ? job.Biddings.Min(y => y.TotalAmount) : null,
+				YourBid = job.Biddings.FirstOrDefault(y => y.UserId == userId)?.TotalAmount,
 				RemainingTime = JobsHelper.GetJobRemainingTime(job.ExpiryDateUtc, currentTime)
 			};
 		}

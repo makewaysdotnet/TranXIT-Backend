@@ -78,11 +78,12 @@ namespace CourierJobService.Helpers
 				return biddings?.SelectMany(x=>x.BiddingProposals).Min(x=>x.DeliveryDateUtc);
 			}
 			else if (Convert.ToBoolean(job.IsJobStatusFromBid) &&
-					userId is not null &&
-					biddings is not null &&
-					biddings.Any())
+					biddings is not null)
 			{
-				return biddings.FirstOrDefault(b => b.UserId == userId)!.BiddingProposals.Min(y=>y.DeliveryDateUtc);
+				return biddings
+					.Where(bid => userId is null || bid.UserId == userId)
+					.SelectMany(bid => bid.BiddingProposals)
+					.FirstOrDefault(proposal => proposal.Id == job.AcceptedBidProposalId)?.DeliveryDateUtc;
 			}
 			return null;
 		}

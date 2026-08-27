@@ -15,6 +15,16 @@ public sealed class GatewayAuthTests : IAsyncLifetime
 	private OcelotGatewayFactory? _gatewayFactory;
 	private HttpClient? _gatewayClient;
 
+	[Fact(DisplayName = "T-NFR-7.GatewayHealthBeforeProxy200")]
+	public async Task GatewayHealthBeforeProxy200()
+	{
+		// UC-NFR-7, UC-NFR-4
+		using var response = await GatewayClient.GetAsync("/health");
+
+		response.StatusCode.Should().Be(HttpStatusCode.OK);
+		(await response.Content.ReadAsStringAsync()).Should().Be("Healthy");
+	}
+
 	[Fact(DisplayName = "T-AUTH-7.GatewayUnauthenticated401")]
 	public async Task GatewayUnauthenticated401()
 	{

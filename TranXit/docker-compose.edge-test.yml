@@ -1,0 +1,79 @@
+# Test-only final override: base + prod + staging + this file, via edge-stack.mjs.
+# Keep the actual staging Caddyfile, production Dockerfiles, migrations and SMTP.
+# Compose 2.24.4+ is required for !override; no service except HTTPS is published.
+x-edge-service: &edge-service
+  restart: "no"
+  labels:
+    io.tranxit.edge-test: ${TRANXIT_EDGE_PROJECT:?Use the edge-stack.mjs wrapper}
+
+networks:
+  backend:
+    name: ${TRANXIT_EDGE_PROJECT:?Use the edge-stack.mjs wrapper}-backend
+  edge:
+    name: ${TRANXIT_EDGE_PROJECT:?Use the edge-stack.mjs wrapper}-edge
+  egress:
+    name: ${TRANXIT_EDGE_PROJECT:?Use the edge-stack.mjs wrapper}-egress
+    # Mailpit is the only SMTP destination in this disposable fixture.
+    internal: true
+
+volumes:
+  tranxit-sql-data:
+    name: ${TRANXIT_EDGE_PROJECT:?Use the edge-stack.mjs wrapper}-sql
+  tranxit-rabbitmq-data:
+    name: ${TRANXIT_EDGE_PROJECT:?Use the edge-stack.mjs wrapper}-rabbitmq
+  tranxit-backups:
+    name: ${TRANXIT_EDGE_PROJECT:?Use the edge-stack.mjs wrapper}-backups
+  caddy-data:
+    name: ${TRANXIT_EDGE_PROJECT:?Use the edge-stack.mjs wrapper}-caddy-data
+  caddy-config:
+    name: ${TRANXIT_EDGE_PROJECT:?Use the edge-stack.mjs wrapper}-caddy-config
+
+services:
+  caddy:
+    <<: *edge-service
+    image: ${TRANXIT_EDGE_PROJECT:?Use the edge-stack.mjs wrapper}:caddy
+    ports: !override
+      - "127.0.0.1:${TRANXIT_EDGE_HTTPS_PORT:?Use the edge-stack.mjs wrapper}:443"
+
+  frontend:
+    <<: *edge-service
+    image: ${TRANXIT_EDGE_PROJECT:?Use the edge-stack.mjs wrapper}:frontend
+    environment:
+      NODE_ENV: production
+      TRANXIT_DEPLOY_ENV: production
+      TRANXIT_ENABLE_DEMO_AUTH: "false"
+      TRANXIT_ENABLE_DEMO_DATA: "false"
+      TRANXIT_E2E_EXPOSE_DEV_CODE: "false"
+    ports: !reset []
+
+  ocelotapigw:
+    <<: *edge-service
+    image: ${TRANXIT_EDGE_PROJECT:?Use the edge-stack.mjs wrapper}:gateway
+    ports: !reset []
+
+  accountservice:
+    <<: *edge-service
+    image: ${TRANXIT_EDGE_PROJECT:?Use the edge-stack.mjs wrapper}:account
+    environment:
+      TestInfrastructure__UseInMemoryBus: "false"
+      ExternalLogin__Google__Enabled: "false"
+    ports: !reset []
+
+  courierjobservice:
+    <<: *edge-service
+    image: ${TRANXIT_EDGE_PROJECT:?Use the edge-stack.mjs wrapper}:courier
+    environment:
+      TestInfrastructure__UseInMemoryBus: "false"
+    ports: !reset []
+
+  sqlserver:
+    <<: *edge-service
+    ports: !reset []
+
+  rabbitmq:
+    <<: *edge-service
+    ports: !reset []
+
+  mailpit:
+    <<: *edge-service
+    ports: !reset []

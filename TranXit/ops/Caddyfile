@@ -18,7 +18,7 @@
 		zone auth_api {
 			match {
 				method POST
-				path /api/login /api/login/google /api/register /api/send-code /api/reset-password
+				path /api/auth/* /api/login /api/login/google /api/register /api/send-code /api/reset-password
 			}
 			key {remote_host}
 			events {$AUTH_RATE_LIMIT_EVENTS}
@@ -29,22 +29,10 @@
 	}
 }
 
-(tranxit_site) {
-	import security_headers
-	encode zstd gzip
-
-	log {
-		output stdout
-		format json
-	}
-
-	handle /api/auth/* {
-		reverse_proxy frontend:3000
-	}
-
+(tranxit_routes) {
 	handle /api/* {
 		import auth_api_rate_limit
-		reverse_proxy ocelotapigw:8080
+		reverse_proxy frontend:3000
 	}
 
 	handle {
@@ -52,10 +40,44 @@
 	}
 }
 
+(tranxit_site) {
+	import security_headers
+	encode zstd gzip
+	log {
+		output stdout
+		format json
+	}
+	import tranxit_routes
+}
+
+(public_tranxit_site) {
+	import security_headers
+	encode zstd gzip
+	log {
+		output stdout
+		format json
+	}
+	@admitted file {
+		root /run/tranxit/admission
+		try_files open
+	}
+	handle @admitted {
+		import tranxit_routes
+	}
+	handle {
+		header Retry-After "60"
+		respond "Temporarily unavailable" 503
+	}
+}
+
 {$DOMAIN} {
-	import tranxit_site
+	import public_tranxit_site
 }
 
 {$STAGING_DOMAIN} {
+	import public_tranxit_site
+}
+
+http://:8082 {
 	import tranxit_site
 }

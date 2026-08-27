@@ -172,6 +172,9 @@ public partial class CourierJobDbContext : DbContext
         modelBuilder.Entity<Job>(entity =>
         {
             entity.HasIndex(e => e.JobNumber, "IX_Jobs").IsUnique();
+            entity.HasIndex(e => e.AcceptedBidProposalId).IsUnique();
+
+            entity.Property(e => e.AcceptedBidProposalId).IsConcurrencyToken();
 
             entity.Property(e => e.Comments)
                 .HasMaxLength(500)
@@ -196,6 +199,11 @@ public partial class CourierJobDbContext : DbContext
             entity.Property(e => e.RecipientName)
                 .HasMaxLength(250)
                 .IsUnicode(false);
+
+            entity.HasOne(d => d.AcceptedBidProposal).WithMany()
+                .HasForeignKey(d => d.AcceptedBidProposalId)
+                .OnDelete(DeleteBehavior.NoAction)
+                .HasConstraintName("FK_Jobs_AcceptedBidProposal");
 
             entity.HasOne(d => d.CargoMode).WithMany(p => p.Jobs)
                 .HasForeignKey(d => d.CargoModeId)

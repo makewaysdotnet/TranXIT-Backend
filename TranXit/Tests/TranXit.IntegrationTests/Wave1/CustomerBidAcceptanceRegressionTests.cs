@@ -11,6 +11,9 @@ public sealed class CustomerBidAcceptanceRegressionTests(SqlContainerFixture fix
 		// UC-CUST-5, E2E-4
 		await SeedTwoBidsAsync();
 		CourierClient.AuthenticateAs(Tokens.ForUser(1, "Customer"));
+		await using var beforeDb = Fixture.CreateCourierJobDbContext();
+		var quotedAmount = (await beforeDb.Biddings.AsNoTracking().SingleAsync(bid => bid.Id == 10)).TotalAmount;
+		quotedAmount.Should().Be(1175);
 
 		var response = await CourierClient.PutAsJsonAsync("/api/bids/status", new
 		{
@@ -31,8 +34,10 @@ public sealed class CustomerBidAcceptanceRegressionTests(SqlContainerFixture fix
 
 		job!.JobStatusId.Should().BeNull();
 		job.IsJobStatusFromBid.Should().BeTrue();
+		job.AcceptedBidProposalId.Should().Be(100);
 		winningBid!.JobStatusId.Should().Be(3);
-		winningBid.TotalAmount.Should().Be(1000);
+		winningBid.TotalAmount.Should().Be(quotedAmount);
+		(await db.BiddingProposals.FindAsync(100))!.Total.Should().Be(quotedAmount);
 		losingBid!.JobStatusId.Should().Be(4);
 	}
 
@@ -90,9 +95,11 @@ public sealed class CustomerBidAcceptanceRegressionTests(SqlContainerFixture fix
 			INSERT INTO [BiddingProposals]
 				([Id], [BiddingId], [DeliveryTypeId], [IsBaseBid], [DeliveryDateUtc], [Total])
 			VALUES
-				(100, 10, 1, 1, DATEADD(day, 5, SYSUTCDATETIME()), 1000),
-				(101, 11, 1, 1, DATEADD(day, 6, SYSUTCDATETIME()), 1200);
+				(100, 10, 1, 1, DATEADD(day, 5, SYSUTCDATETIME()), 1175),
+				(101, 11, 1, 1, DATEADD(day, 6, SYSUTCDATETIME()), 1375);
 			SET IDENTITY_INSERT [BiddingProposals] OFF;
+			INSERT INTO [BiddingCharges] ([BiddingId], [Name], [Amount])
+			VALUES (10, 'Freight', 1000), (11, 'Freight', 1100);
 			""");
 	}
 }

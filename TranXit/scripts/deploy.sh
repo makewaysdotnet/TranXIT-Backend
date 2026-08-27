@@ -10,8 +10,8 @@ Usage: scripts/deploy.sh --env staging|production --sha <backend-commit> \
 Migration policy:
   expand-contract   Candidate migrations are additive/backward-compatible. Smoke failure rolls
                     back code only and keeps the expanded schema.
-  restore-required  Candidate migrations are not backward-compatible. Smoke failure restores the
-                    paired pre-migration backup before starting the known-green code.
+  restore-required  Candidate migrations are not backward-compatible. Only a pre-admission failure
+                    may restore the paired backup. After admission, fence for manual recovery.
 
 Environment:
   TRANXIT_ENV_FILE      Defaults to /opt/tranxit/.env.
@@ -121,6 +121,20 @@ if [ -f "$incomplete_restore_state" ]; then
   exit 1
 fi
 
+ADMISSION_STATE="$MARKER_DIR/deploy-$TARGET_ENV-admitted"
+if [ -e "$ADMISSION_STATE" ] || [ -L "$ADMISSION_STATE" ]; then
+  echo "Refusing deploy: unresolved public admission may include acknowledged writes: $ADMISSION_STATE" >&2
+  echo "Fence and reconcile that release using the runbook; do not restore its pre-migration backup automatically." >&2
+  exit 1
+fi
+export TRANXIT_ADMISSION_DIR="${TRANXIT_ADMISSION_DIR:-$MARKER_DIR/admission-$TARGET_ENV}"
+if [[ "$TRANXIT_ADMISSION_DIR" != /* ]] || [ -L "$TRANXIT_ADMISSION_DIR" ]; then
+  echo "TRANXIT_ADMISSION_DIR must be an absolute, non-symlink directory." >&2
+  exit 2
+fi
+mkdir -p "$TRANXIT_ADMISSION_DIR"
+ADMISSION_OPEN="$TRANXIT_ADMISSION_DIR/open"
+
 if [ "$TARGET_ENV" = "production" ]; then
   for mailpit_var in MAILPIT_DOMAIN MAILPIT_BASIC_AUTH_USER MAILPIT_BASIC_AUTH_HASH TRANXIT_E2E_MAIL_INBOX; do
     if [ -n "${!mailpit_var:-}" ]; then
@@ -130,7 +144,8 @@ if [ "$TARGET_ENV" = "production" ]; then
   done
 fi
 
-if [ "${TRANXIT_DEPLOY_TEST_FORCE_SMOKE_FAILURE:-false}" = "true" ] &&
+if { [ "${TRANXIT_DEPLOY_TEST_FORCE_SMOKE_FAILURE:-false}" = "true" ] ||
+     [ "${TRANXIT_DEPLOY_TEST_FORCE_POST_ADMISSION_FAILURE:-false}" = "true" ]; } &&
    { [ "$TARGET_ENV" != "staging" ] ||
      [ "${TRANXIT_ALLOW_FAILURE_INJECTION:-false}" != "true" ]; }; then
   echo "Failure injection is allowed only on staging with TRANXIT_ALLOW_FAILURE_INJECTION=true." >&2
@@ -161,14 +176,98 @@ compose() {
 application_services=(caddy frontend ocelotapigw accountservice courierjobservice)
 stateful_services=(sqlserver rabbitmq)
 
+close_public_admission() {
+  rm -f -- "$ADMISSION_OPEN" || return $?
+  if [ -e "$ADMISSION_OPEN" ] || [ -L "$ADMISSION_OPEN" ]; then
+    echo "Public admission could not be closed; external fencing is required." >&2
+    return 1
+  fi
+  echo "Public admission is closed."
+}
+
+record_public_admission() {
+  local backend_sha="$1" frontend_sha="$2" state_tmp
+  state_tmp="$(mktemp "$MARKER_DIR/.admitted-$TARGET_ENV.XXXXXX")" || return $?
+  printf 'environment=%s\nbackend_sha=%s\nfrontend_sha=%s\nbackup_manifest=%s\n' \
+    "$TARGET_ENV" "$backend_sha" "$frontend_sha" "$backup_manifest" > "$state_tmp" || return $?
+  chmod 600 "$state_tmp" || return $?
+  mv -fT -- "$state_tmp" "$ADMISSION_STATE" || return $?
+  # Persist before opening the edge so a process restart cannot forget possible public writes.
+  sync -f "$ADMISSION_STATE" || return $?
+  admission_may_have_opened=true
+}
+
+open_public_admission() {
+  local open_tmp
+  if [ ! -f "$ADMISSION_STATE" ] || [ -e "$ADMISSION_OPEN" ] || [ -L "$ADMISSION_OPEN" ]; then
+    echo "Refusing admission without a persisted boundary and a closed gate." >&2
+    return 1
+  fi
+  open_tmp="$(mktemp "$TRANXIT_ADMISSION_DIR/.open.XXXXXX")" || return $?
+  printf 'admitted\n' > "$open_tmp" || return $?
+  chmod 644 "$open_tmp" || return $?
+  mv -fT -- "$open_tmp" "$ADMISSION_OPEN" || return $?
+  echo "Public admission is open."
+}
+
+complete_public_admission() {
+  rm -f -- "$ADMISSION_STATE" || return $?
+  sync -f "$MARKER_DIR" || return $?
+}
+
+fence_application_stack() {
+  local failed=0
+  close_public_admission || failed=1
+  stop_application_stack || failed=1
+  [ "$failed" -eq 0 ]
+}
+
 start_application_stack() {
   if [ "$TARGET_ENV" = "staging" ]; then
-    compose up -d --no-deps --wait --wait-timeout 300 mailpit
+    compose up -d --no-deps --wait --wait-timeout 300 mailpit || return $?
   fi
-  compose up -d --no-deps --wait --wait-timeout 300 accountservice courierjobservice
-  compose up -d --no-deps --wait --wait-timeout 300 ocelotapigw
-  compose up -d --no-deps --wait --wait-timeout 300 frontend
-  compose up -d --no-deps --wait --wait-timeout 300 caddy
+  compose up -d --no-deps --wait --wait-timeout 300 accountservice courierjobservice || return $?
+  compose up -d --no-deps --wait --wait-timeout 300 ocelotapigw || return $?
+  compose up -d --no-deps --wait --wait-timeout 300 frontend || return $?
+  compose up -d --no-deps --wait --wait-timeout 300 caddy || return $?
+}
+
+stop_application_stack() {
+  local failed=0
+  local service container_ids container_id state
+
+  # Attempt every stop even if the edge stop fails; never infer runtime state from exit 0.
+  compose stop --timeout 30 caddy || failed=1
+  compose stop --timeout 30 frontend ocelotapigw accountservice courierjobservice || failed=1
+
+  for service in "${application_services[@]}"; do
+    if ! container_ids="$(docker ps --all --quiet \
+      --filter "label=com.docker.compose.project=$project_name" \
+      --filter "label=com.docker.compose.service=$service")"; then
+      echo "Cannot enumerate $service containers; stopped state is unverified." >&2
+      failed=1
+      continue
+    fi
+    for container_id in $container_ids; do
+      if ! state="$(docker inspect --format '{{.State.Status}}' "$container_id")"; then
+        echo "Cannot inspect $service container $container_id; stopped state is unverified." >&2
+        failed=1
+        continue
+      fi
+      case "$state" in
+        created|exited|dead) ;;
+        *)
+          echo "$service container $container_id is not confirmed stopped (state: $state)." >&2
+          failed=1
+          ;;
+      esac
+    done
+  done
+
+  if [ "$failed" -ne 0 ]; then
+    return 1
+  fi
+  echo "Application services are confirmed stopped."
 }
 
 marker_value() {
@@ -190,6 +289,7 @@ rollback_available="false"
 green_backend_sha=""
 green_frontend_sha=""
 green_image_tag=""
+green_admission_policy=""
 if [ -f "$MARKER_FILE" ]; then
   if [ "$ALLOW_FIRST_DEPLOY" = "true" ]; then
     echo "--allow-first-deploy is invalid because a known-green marker already exists: $MARKER_FILE" >&2
@@ -199,6 +299,7 @@ if [ -f "$MARKER_FILE" ]; then
   green_backend_sha="$(marker_value backend_sha "$MARKER_FILE")"
   green_frontend_sha="$(marker_value frontend_sha "$MARKER_FILE")"
   green_image_tag="$(marker_value image_tag "$MARKER_FILE" 2>/dev/null || printf '%s' "${green_backend_sha:0:12}")"
+  green_admission_policy="$(marker_value admission_policy "$MARKER_FILE" 2>/dev/null || true)"
 
   if [ "$green_environment" != "$TARGET_ENV" ] ||
      ! [[ "$green_backend_sha" =~ ^[0-9A-Fa-f]{40}$ ]] ||
@@ -231,16 +332,19 @@ account_migration_after=""
 courier_migration_after=""
 writers_stopped="false"
 migration_started="false"
+admission_may_have_opened="false"
+marker_commit_started="false"
 
 wait_for_gateway() {
   local ready="false"
-  echo "Waiting for gateway through $base_url/api/roles ..."
+  echo "Waiting for the private edge at http://caddy:8082/api/roles (public admission stays closed)..."
   for _ in $(seq 1 60); do
-    if curl -fsS "$base_url/api/roles" >/dev/null 2>&1; then
+    if docker run --rm --network "${project_name}_backend" curlimages/curl:8.13.0 \
+      --connect-timeout 5 --max-time 10 -fsS http://caddy:8082/api/roles >/dev/null 2>&1; then
       ready="true"
       break
     fi
-    sleep 5
+    sleep 5 || return $?
   done
   if [ "$ready" != "true" ]; then
     echo "Gateway did not become ready within 5 minutes." >&2
@@ -251,9 +355,9 @@ wait_for_gateway() {
 run_release_smoke() {
   "$SCRIPT_DIR/verify-production-topology.sh" \
     --project-name "$project_name" \
-    --egress-url "${TRANXIT_EGRESS_PROBE_URL:?Set TRANXIT_EGRESS_PROBE_URL}"
+    --egress-url "${TRANXIT_EGRESS_PROBE_URL:?Set TRANXIT_EGRESS_PROBE_URL}" || return $?
   export TRANXIT_SMOKE_DOCKER_NETWORK="${TRANXIT_SMOKE_DOCKER_NETWORK:-${project_name}_backend}"
-  "$SCRIPT_DIR/smoke.sh" --base-url "$base_url"
+  TRANXIT_SMOKE_PRIVATE_HTTP=true "$SCRIPT_DIR/smoke.sh" --base-url http://caddy:8082 || return $?
 }
 
 database_migration_head() {
@@ -313,17 +417,28 @@ checkout_known_green() {
 }
 
 rollback_known_green() {
+  echo "Stopping and verifying candidate application services before recovery."
+  fence_application_stack || return $?
+
   if [ "$rollback_available" != "true" ]; then
     echo "Automatic rollback unavailable because no last-$TARGET_ENV-green marker exists." >&2
     return 1
   fi
+  if [ "$green_admission_policy" != "private-smoke-v1" ]; then
+    echo "Known-green release predates the private admission gate; automatic restart is unsafe. Recover manually while fenced." >&2
+    return 1
+  fi
 
   echo "Rolling back to known-green backend $green_backend_sha and frontend $green_frontend_sha"
-  echo "Stopping candidate application services before recovery."
-  compose stop "${application_services[@]}" || return 1
 
   if [ "$migration_started" = "true" ]; then
     if [ "$MIGRATION_POLICY" = "restore-required" ]; then
+      if [ "$admission_may_have_opened" = "true" ] ||
+         [ -e "$ADMISSION_STATE" ] || [ -L "$ADMISSION_STATE" ]; then
+        echo "AUTOMATIC RESTORE REFUSED: public traffic may have been admitted; the pre-migration backup cannot preserve acknowledged writes." >&2
+        echo "Keep the stack fenced and reconcile the live databases. Admission record: $ADMISSION_STATE" >&2
+        return 1
+      fi
       if [ -z "$backup_manifest" ]; then
         echo "Cannot restore: pre-migration backup manifest is unavailable." >&2
         return 1
@@ -350,6 +465,9 @@ rollback_known_green() {
   start_application_stack || return 1
   wait_for_gateway || return 1
   run_release_smoke || return 1
+  record_public_admission "$green_backend_sha" "$green_frontend_sha" || return 1
+  open_public_admission || return 1
+  complete_public_admission || return 1
   echo "Known-green release restored successfully. Marker remains unchanged: $MARKER_FILE"
 }
 
@@ -363,8 +481,20 @@ on_error() {
   compose logs --tail=200 --no-color >&2 || true
 
   if [ "$writers_stopped" = "true" ] || [ "$migration_started" = "true" ]; then
-    if ! rollback_known_green; then
-      echo "AUTOMATIC ROLLBACK FAILED. Application writers remain stopped; use the runbook and paired backup manifest." >&2
+    if [ "$marker_commit_started" = "true" ]; then
+      echo "Release-marker finalization is incomplete; reconcile the marker and admission record manually. Automatic restore/redeploy is disabled." >&2
+      if fence_application_stack; then
+        echo "RECOVERY FENCED: application services are confirmed stopped; preserve live data while reconciling finalization." >&2
+      else
+        echo "UNSAFE/UNVERIFIED RECOVERY: block traffic outside this stack and verify all writers are stopped." >&2
+      fi
+    elif ! rollback_known_green; then
+      echo "AUTOMATIC ROLLBACK FAILED. Stopping and verifying application services again." >&2
+      if fence_application_stack; then
+        echo "RECOVERY FENCED: application services are confirmed stopped; use the runbook and paired backup manifest." >&2
+      else
+        echo "UNSAFE/UNVERIFIED RECOVERY: application services may still be running. Block public traffic outside this stack and verify all writers are stopped before any manual restore or restart." >&2
+      fi
       [ -n "$backup_manifest" ] && echo "Backup manifest: $backup_manifest" >&2
     fi
   else
@@ -428,17 +558,17 @@ export TRANXIT_INTERNAL_API_URL="${TRANXIT_INTERNAL_API_URL:-http://ocelotapigw:
 echo "Resolved backend SHA: $candidate_backend_sha"
 echo "Resolved frontend SHA: $candidate_frontend_sha"
 echo "Validating compose config..."
-compose config --quiet
+compose config --quiet || on_error "$?" "$LINENO"
 
 echo "Building candidate images before downtime..."
-compose build caddy accountservice courierjobservice ocelotapigw frontend
+compose build caddy accountservice courierjobservice ocelotapigw frontend || on_error "$?" "$LINENO"
 
 echo "Stopping application writers for the pre-migration backup..."
 writers_stopped="true"
-compose stop "${application_services[@]}"
+fence_application_stack || on_error "$?" "$LINENO"
 
 echo "Starting data dependencies and waiting for health checks..."
-compose up -d --no-recreate --wait --wait-timeout 300 "${stateful_services[@]}"
+compose up -d --no-recreate --wait --wait-timeout 300 "${stateful_services[@]}" || on_error "$?" "$LINENO"
 
 database_presence="$(database_pair_presence)"
 case "$database_presence" in
@@ -450,7 +580,7 @@ case "$database_presence" in
       false
     fi
     echo "Creating the empty first-deploy database pair before the baseline backup..."
-    create_empty_database_pair
+    create_empty_database_pair || on_error "$?" "$LINENO"
     ;;
   *)
     echo "Database pair is inconsistent (Account|CourierJob = $database_presence); refusing to migrate or back up." >&2
@@ -475,39 +605,47 @@ courier_migration_before="$(marker_value courier_migration_head "$backup_manifes
 
 migration_started="true"
 echo "Applying AccountService migrations..."
-compose run --rm --no-deps accountservice dotnet AccountService.dll --apply-migrations
+compose run --rm --no-deps accountservice dotnet AccountService.dll --apply-migrations || on_error "$?" "$LINENO"
 
 echo "Bootstrapping the single Admin account..."
-compose run --rm --no-deps accountservice dotnet AccountService.dll --bootstrap-admin
+compose run --rm --no-deps accountservice dotnet AccountService.dll --bootstrap-admin || on_error "$?" "$LINENO"
 
 echo "Applying CourierJobService migrations..."
-compose run --rm --no-deps courierjobservice dotnet CourierJobService.dll --apply-migrations
+compose run --rm --no-deps courierjobservice dotnet CourierJobService.dll --apply-migrations || on_error "$?" "$LINENO"
 
 account_migration_after="$(database_migration_head Tranxit_Account)"
 courier_migration_after="$(database_migration_head Tranxit_CourierJob)"
 
 echo "Starting candidate stack..."
-start_application_stack
-wait_for_gateway
+start_application_stack || on_error "$?" "$LINENO"
+wait_for_gateway || on_error "$?" "$LINENO"
 
 echo "Running candidate smoke checks..."
-run_release_smoke
+run_release_smoke || on_error "$?" "$LINENO"
 
 if [ "${TRANXIT_DEPLOY_TEST_FORCE_SMOKE_FAILURE:-false}" = "true" ]; then
   echo "Injecting the requested staging smoke failure to exercise automatic rollback." >&2
   false
 fi
 
+record_public_admission "$candidate_backend_sha" "$candidate_frontend_sha" || on_error "$?" "$LINENO"
+open_public_admission || on_error "$?" "$LINENO"
+if [ "${TRANXIT_DEPLOY_TEST_FORCE_POST_ADMISSION_FAILURE:-false}" = "true" ]; then
+  echo "Injecting the requested staging post-admission failure; recovery must preserve admitted writes." >&2
+  false
+fi
+
 mkdir -p "$MARKER_DIR"
 marker_tmp="$(mktemp "$MARKER_DIR/.last-$TARGET_ENV-green.XXXXXX")"
 cat > "$marker_tmp" <<MARKER
-format_version=2
+format_version=3
 environment=$TARGET_ENV
 backend_sha=$candidate_backend_sha
 frontend_ref=$FRONTEND_REF
 frontend_sha=$candidate_frontend_sha
 image_tag=$candidate_image_tag
 migration_policy=$MIGRATION_POLICY
+admission_policy=private-smoke-v1
 pre_migration_backup_manifest=$backup_manifest
 account_migration_before=$account_migration_before
 account_migration_after=$account_migration_after
@@ -522,7 +660,10 @@ if [ -f "$MARKER_FILE" ]; then
   chmod 600 "$marker_prev_tmp"
   mv -f "$marker_prev_tmp" "$MARKER_PREV_FILE"
 fi
+marker_commit_started=true
 mv -f "$marker_tmp" "$MARKER_FILE"
+sync -f "$MARKER_FILE"
+complete_public_admission || on_error "$?" "$LINENO"
 
 trap - ERR
 echo "Deploy completed. Known-green marker advanced atomically: $MARKER_FILE"

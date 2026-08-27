@@ -40,6 +40,7 @@ app.UseCors(options =>
 
 app.UseAuthentication();
 app.UseAuthorization();
-app.MapHealthChecks("/health");
+// Ocelot is terminal middleware, so liveness must run before the proxy pipeline.
+app.UseHealthChecks("/health");
 await app.UseOcelot();
 app.Run();

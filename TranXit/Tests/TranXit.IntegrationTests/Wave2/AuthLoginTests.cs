@@ -132,10 +132,6 @@ public sealed class AuthLoginTests(SqlContainerFixture fixture) : IntegrationTes
 		return result.Value!;
 	}
 
-	private async Task<HttpResponseMessage> RefreshAsync(string refreshToken)
-	{
-		var request = new HttpRequestMessage(HttpMethod.Post, "/api/refresh");
-		request.Headers.Add("Cookie", $"tranxit_refresh={refreshToken}");
-		return await AccountClient.SendAsync(request);
-	}
+	private Task<HttpResponseMessage> RefreshAsync(string refreshToken) =>
+		AccountClient.PostAsJsonAsync("/api/refresh", new { refreshToken });
 }

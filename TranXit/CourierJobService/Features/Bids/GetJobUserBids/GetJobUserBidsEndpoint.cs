@@ -1,5 +1,7 @@
 ﻿using Carter;
 using CourierJobService.Database;
+using CourierJobService.Enums;
+using CourierJobService.Features.Bids.Shared;
 using CourierJobService.Requests;
 using MassTransit;
 using MediatR;
@@ -63,11 +65,20 @@ public class GetJobUserBids
 				.Select(x => new JobUserBidResult
 				{
 					BidId = x.Id,
-					BidProposalId = x.BiddingProposals
-						.OrderByDescending(proposal => proposal.IsBaseBid == true)
-						.ThenBy(proposal => proposal.Total)
-						.Select(proposal => (int?)proposal.Id)
-						.FirstOrDefault(),
+					AcceptedBidProposalId = x.Job.AcceptedBidProposal != null && x.Job.AcceptedBidProposal.BiddingId == x.Id
+						? x.Job.AcceptedBidProposalId : null,
+					BidStatusId = x.JobStatusId,
+					IsJobAwarded = x.Job.AcceptedBidProposalId != null || x.Job.IsJobStatusFromBid == true ||
+						x.Job.JobStatusId == (int)JobStatusEnum.Won || x.Job.JobStatusId == (int)JobStatusEnum.InTransit ||
+						x.Job.JobStatusId == (int)JobStatusEnum.Delivered ||
+						x.Job.Biddings.Any(bid => bid.JobStatusId == (int)JobStatusEnum.Won ||
+							bid.JobStatusId == (int)JobStatusEnum.InTransit || bid.JobStatusId == (int)JobStatusEnum.Delivered),
+					CanAccept = x.Job.AcceptedBidProposalId == null && x.Job.IsJobStatusFromBid != true &&
+						(x.Job.JobStatusId == (int)JobStatusEnum.Open || x.Job.JobStatusId == (int)JobStatusEnum.Bidding) &&
+						x.Job.ExpiryDateUtc > DateTime.UtcNow &&
+						(x.JobStatusId == null || x.JobStatusId == (int)JobStatusEnum.Open || x.JobStatusId == (int)JobStatusEnum.Bidding) &&
+						!x.Job.Biddings.Any(bid => bid.JobStatusId == (int)JobStatusEnum.Won ||
+							bid.JobStatusId == (int)JobStatusEnum.InTransit || bid.JobStatusId == (int)JobStatusEnum.Delivered),
 					BidMinOffer = x.TotalAmount,
 					CourierId = x.UserId,
 				})
@@ -82,18 +93,37 @@ public class GetJobUserBids
 			var bidProposalLookup = await jobDbContext.BiddingProposals
 				.AsNoTracking()
 				.Where(proposal => proposal.BiddingId.HasValue && bidIds.Contains(proposal.BiddingId.Value))
-				.Select(proposal => new { proposal.BiddingId, proposal.Id })
+				.OrderByDescending(proposal => proposal.IsBaseBid == true)
+				.ThenBy(proposal => proposal.Total)
+				.ThenBy(proposal => proposal.Id)
+				.Select(proposal => new
+				{
+					proposal.BiddingId,
+					Proposal = new JobUserBidProposalResult
+					{
+						BidProposalId = proposal.Id,
+						IsBaseBid = proposal.IsBaseBid == true,
+						Total = proposal.Total,
+						DeliveryDateUtc = proposal.DeliveryDateUtc,
+						DeliveryType = proposal.DeliveryType == null ? null : proposal.DeliveryType.Name
+					}
+				})
 				.ToListAsync(cancellationToken);
 
 			foreach (var item in paginatedResponse.Items)
 			{
-				item.BidProposalIds = bidProposalLookup
+				item.BidProposals = bidProposalLookup
 					.Where(proposal => proposal.BiddingId == item.BidId)
-					.Select(proposal => proposal.Id)
+					.Select(proposal => proposal.Proposal)
 					.ToList();
-				item.BidProposalId ??= item.BidProposalIds
-					.Select(proposalId => (int?)proposalId)
-					.FirstOrDefault();
+				item.BidProposalIds = item.BidProposals.Select(proposal => proposal.BidProposalId).ToList();
+				var baseProposals = item.BidProposals.Where(proposal => proposal.IsBaseBid).ToArray();
+				item.CanAccept &= baseProposals.Length == 1 && QuoteAmount.IsValidStored(baseProposals[0].Total) &&
+					baseProposals[0].Total == item.BidMinOffer;
+				// An awarded legacy bid with unknown history must not silently select its base proposal.
+				item.BidProposalId = item.AcceptedBidProposalId ?? (item.CanAccept
+					? item.BidProposals.FirstOrDefault(proposal => proposal.Total.HasValue)?.BidProposalId
+					: null);
 				var user = await UserRequest.GetUserAsync(item!.CourierId, messageBus);
 				item.CourierName = user?.UserName!;
 			}

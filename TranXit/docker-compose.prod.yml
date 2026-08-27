@@ -34,6 +34,10 @@ services:
       - ./ops/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
+      - type: bind
+        source: ${TRANXIT_ADMISSION_DIR:?Set TRANXIT_ADMISSION_DIR}
+        target: /run/tranxit/admission
+        read_only: true
     networks:
       - edge
       - backend
@@ -70,7 +74,7 @@ services:
       ocelotapigw:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000 >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000 >/dev/null 2>&1"]
       interval: 30s
       timeout: 10s
       retries: 5

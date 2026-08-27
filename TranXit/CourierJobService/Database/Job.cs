@@ -42,6 +42,10 @@ public partial class Job
 
     public bool? IsJobStatusFromBid { get; set; }
 
+    public int? AcceptedBidProposalId { get; set; }
+
+    public virtual BiddingProposal? AcceptedBidProposal { get; set; }
+
     public virtual ICollection<Bidding> Biddings { get; set; } = new List<Bidding>();
 
     public virtual CargoMode? CargoMode { get; set; }

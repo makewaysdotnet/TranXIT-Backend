@@ -67,6 +67,7 @@ set -a
 # shellcheck source=/dev/null
 . "$ENV_FILE"
 set +a
+export TRANXIT_ADMISSION_DIR="${TRANXIT_ADMISSION_DIR:-${TRANXIT_MARKER_DIR:-/opt/tranxit}/admission-$TARGET_ENV}"
 
 BACKUP_DIR="${TRANXIT_BACKUP_DIR:-/opt/tranxit/backups}"
 RETENTION_DAYS="${TRANXIT_BACKUP_RETENTION_DAYS:-14}"
