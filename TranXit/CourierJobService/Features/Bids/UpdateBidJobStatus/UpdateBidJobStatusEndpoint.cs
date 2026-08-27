@@ -48,6 +48,7 @@ public class UpdateBidJobStatus
 {
 	public const string ForbiddenError = "Forbidden";
 	public const string AwardConflictError = "Job or bid is no longer eligible for award";
+	public const string QuoteReviewError = "Stored quote amounts are inconsistent and require review before acceptance";
 
 	#region Command
 	public class Command : IRequest<Result<CreateUpdateBidResult>>
@@ -200,9 +201,17 @@ public class UpdateBidJobStatus
 				{
 					return new Error("Bid proposal total not found");
 				}
+				var baseProposals = winningBid.BiddingProposals.Where(proposal => proposal.IsBaseBid == true).ToArray();
+				if (baseProposals.Length != 1 || !QuoteAmount.IsValidStored(baseProposals[0].Total) ||
+					!QuoteAmount.IsValidStored(selectedProposal.Total) ||
+					winningBid.TotalAmount != baseProposals[0].Total)
+				{
+					// Old inconsistent quotes need an explicit decision, never an implicit price rewrite.
+					return new Error(QuoteReviewError);
+				}
 
 				winningBid.JobStatusId = (int)JobStatusEnum.Won;
-				// Preserve the existing first-award pricing contract; retries never recalculate it.
+				// Select the stored all-in proposal; no charge addition or recalculation on award.
 				winningBid.TotalAmount = selectedProposal.Total.Value;
 				var losingBids = await jobDbContext.Biddings
 					.Where(bid => bid.JobId == jobId && bid.Id != winningBid.Id)

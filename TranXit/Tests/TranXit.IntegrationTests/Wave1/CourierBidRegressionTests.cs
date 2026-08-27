@@ -57,6 +57,8 @@ public sealed class CourierBidRegressionTests(SqlContainerFixture fixture) : Int
 		bid!.JobId.Should().Be(1);
 		bid.UserId.Should().Be(2);
 		bid.BiddingProposals.Should().ContainSingle(x => x.IsBaseBid == true);
+		bid.TotalAmount.Should().Be(175);
+		bid.BiddingProposals.Single().Total.Should().Be(bid.TotalAmount);
 	}
 
 	[Fact(DisplayName = "T-COUR-4.PlaceBidSameJobItemHappy")]
@@ -159,7 +161,7 @@ public sealed class CourierBidRegressionTests(SqlContainerFixture fixture) : Int
 				{
 					jobItemId,
 					unitPrice = 100.0,
-					itemTotal = 100.0
+					itemTotal = 2400.0
 				}
 			}
 			: [];
@@ -179,7 +181,7 @@ public sealed class CourierBidRegressionTests(SqlContainerFixture fixture) : Int
 					deliveryTypeId = 1,
 					isBaseBid,
 					deliveryDate = deliveryDate ?? DateTime.UtcNow.AddDays(5),
-					total = 1000.0,
+					total = jobItemId.HasValue ? 2575.0 : 175.0,
 					bidProposalItems = proposalItems
 				}
 			}

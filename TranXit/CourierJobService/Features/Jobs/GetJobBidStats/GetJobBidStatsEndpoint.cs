@@ -83,11 +83,11 @@ public class GetJobStats
 				TotalBids = job.Biddings?.Count,
 				Status = JobsHelper.GetJobStatus(job, job.Biddings, request.UserId).Item2,
 				AverageBid = job.Biddings?.Count > 0 ?
-					job.Biddings?.Average(x => x.TotalAmount) : 0,
+					job.Biddings?.Average(x => x.TotalAmount) : null,
 				MaxBid = job.Biddings?.Count > 0 ?
-					job.Biddings?.Max(x => x.TotalAmount) : 0,
+					job.Biddings?.Max(x => x.TotalAmount) : null,
 				MinBid = job.Biddings?.Count > 0 ?
-					job.Biddings?.Min(x => x.TotalAmount) : 0,
+					job.Biddings?.Min(x => x.TotalAmount) : null,
 				CreatedOnUtc = job.CreatedOnUtc,
 			};
 		}

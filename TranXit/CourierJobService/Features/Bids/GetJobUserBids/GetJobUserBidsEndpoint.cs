@@ -1,6 +1,7 @@
 ﻿using Carter;
 using CourierJobService.Database;
 using CourierJobService.Enums;
+using CourierJobService.Features.Bids.Shared;
 using CourierJobService.Requests;
 using MassTransit;
 using MediatR;
@@ -116,7 +117,9 @@ public class GetJobUserBids
 					.Select(proposal => proposal.Proposal)
 					.ToList();
 				item.BidProposalIds = item.BidProposals.Select(proposal => proposal.BidProposalId).ToList();
-				item.CanAccept &= item.BidProposals.Any(proposal => proposal.Total.HasValue);
+				var baseProposals = item.BidProposals.Where(proposal => proposal.IsBaseBid).ToArray();
+				item.CanAccept &= baseProposals.Length == 1 && QuoteAmount.IsValidStored(baseProposals[0].Total) &&
+					baseProposals[0].Total == item.BidMinOffer;
 				// An awarded legacy bid with unknown history must not silently select its base proposal.
 				item.BidProposalId = item.AcceptedBidProposalId ?? (item.CanAccept
 					? item.BidProposals.FirstOrDefault(proposal => proposal.Total.HasValue)?.BidProposalId

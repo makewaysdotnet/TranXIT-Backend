@@ -43,24 +43,10 @@ public class CreateBid
 	{
 		public required int JobId { get; set; }
 		public int UserId { get; set; }
-		public double? TotalAmount
-		{
-			get
-			{
-				var proposals = BidProposals ?? Enumerable.Empty<BidProposalCommand>();
-				var baseBidTotal = proposals.FirstOrDefault(x => x.IsBaseBid == true)?.Total;
-
-				return PickupCharges +
-					HandlingCharges +
-					CustomClearanceCharges +
-					(BidCustomCharges?.Sum(x => x.Amount) ?? 0) +
-					(baseBidTotal ?? 0);
-			}
-		}
 		public bool? IsInsurancePolicy { get; set; }
-		public double PickupCharges { get; set; } = 0;
-		public double HandlingCharges { get; set; } = 0;
-		public double CustomClearanceCharges { get; set; } = 0;
+		public decimal PickupCharges { get; set; } = 0;
+		public decimal HandlingCharges { get; set; } = 0;
+		public decimal CustomClearanceCharges { get; set; } = 0;
 		public IEnumerable<BidChargesCommand> BidCustomCharges { get; set; } = Enumerable.Empty<BidChargesCommand>();
 		public required IEnumerable<BidProposalCommand> BidProposals { get; set; }
 	}
@@ -68,21 +54,21 @@ public class CreateBid
 	{
 		public string? Name { get; set; }
 		public string? Description { get; set; }
-		public double Amount { get; set; } = 0;
+		public decimal Amount { get; set; } = 0;
 	}
 	public class BidProposalCommand
 	{
 		public int? DeliveryTypeId { get; set; }
 		public bool? IsBaseBid { get; set; }
 		public DateTime? DeliveryDate { get; set; }
-		public double Total { get; set; } = 0;
+		public decimal Total { get; set; } = 0;
 		public IEnumerable<BidProposalItemCommand> BidProposalItems { get; set; } = Enumerable.Empty<BidProposalItemCommand>();
 	}
 	public record BidProposalItemCommand
 	{
 		public int? JobItemId { get; set; }
-		public double UnitPrice { get; set; } = 0;
-		public double ItemTotal { get; set; } = 0;
+		public decimal UnitPrice { get; set; } = 0;
+		public decimal ItemTotal { get; set; } = 0;
 
 	}
 	#endregion
@@ -97,30 +83,65 @@ public class CreateBid
 				.NotEmpty().WithMessage("Your Job Proposal cannot be empty")
 				.NotNull().WithMessage("Your Job Proposal cannot be null")
 				.Must(x => x?.Any() == true).WithMessage("There must be atleast one job proposal")
-				.Must(x => x?.Any(proposal => proposal.IsBaseBid == true) == true)
-				.WithMessage("A base bid proposal is required");
-			RuleForEach(c => c.BidCustomCharges).ChildRules(charge =>
+				.Must(x => x?.Count(proposal => proposal?.IsBaseBid == true) == 1)
+				.WithMessage("Exactly one base bid proposal is required");
+			RuleFor(c => c.PickupCharges).Must(QuoteAmount.IsValid).WithMessage(QuoteAmount.ValidationMessage);
+			RuleFor(c => c.HandlingCharges).Must(QuoteAmount.IsValid).WithMessage(QuoteAmount.ValidationMessage);
+			RuleFor(c => c.CustomClearanceCharges).Must(QuoteAmount.IsValid).WithMessage(QuoteAmount.ValidationMessage);
+			RuleFor(c => c.BidCustomCharges).NotNull();
+			RuleForEach(c => c.BidCustomCharges).NotNull().ChildRules(charge =>
 			{
+				charge.RuleFor(c => c.Amount).Must(QuoteAmount.IsValid).WithMessage(QuoteAmount.ValidationMessage);
 				charge.RuleFor(c => c.Name)
 					.MaximumLength(50).WithMessage("Charge name cannot exceed 50 characters");
 				charge.RuleFor(c => c.Description)
 					.MaximumLength(100).WithMessage("Charge description cannot exceed 100 characters");
 			});
-			RuleForEach(c => c.BidProposals).ChildRules(proposal =>
+			RuleForEach(c => c.BidProposals).NotNull().ChildRules(proposal =>
 			{
+				proposal.RuleFor(c => c.Total).Must(QuoteAmount.IsValid).WithMessage(QuoteAmount.ValidationMessage);
+				proposal.RuleFor(c => c.BidProposalItems).NotNull()
+					.Must(items => items is not null && items.Where(item => item is not null)
+						.GroupBy(item => item.JobItemId).All(group => group.Count() == 1))
+					.WithMessage("Each job item may appear only once per proposal");
 				proposal.RuleFor(c => c.DeliveryTypeId)
 					.NotNull().WithMessage("Delivery type is required")
 					.GreaterThan(0).WithMessage("Delivery type is invalid");
 				proposal.RuleFor(c => c.DeliveryDate)
 					.NotNull().WithMessage("Delivery date is required");
-				proposal.RuleForEach(c => c.BidProposalItems).ChildRules(item =>
+				proposal.RuleForEach(c => c.BidProposalItems).NotNull().ChildRules(item =>
 				{
+					item.RuleFor(c => c.UnitPrice).Must(QuoteAmount.IsValid).WithMessage(QuoteAmount.ValidationMessage);
+					item.RuleFor(c => c.ItemTotal).Must(QuoteAmount.IsValid).WithMessage(QuoteAmount.ValidationMessage);
 					item.RuleFor(c => c.JobItemId)
 						.NotNull().WithMessage("Job item is required")
 						.GreaterThan(0).WithMessage("Job item is invalid");
 				});
 			});
+			RuleFor(c => c).Custom((command, context) =>
+			{
+				foreach (var proposal in command.BidProposals ?? [])
+				{
+					if (proposal is null || !TryProposalTotal(command, proposal, out var total) || total != proposal.Total)
+					{
+						context.AddFailure(nameof(command.BidProposals), "Proposal total must equal item totals plus all shared charges exactly once, within the supported amount limit");
+					}
+				}
+			});
 		}
+	}
+
+	private static bool TryProposalTotal(Command command, BidProposalCommand proposal, out decimal total)
+	{
+		total = 0;
+		if (command.BidCustomCharges is null || command.BidCustomCharges.Any(charge => charge is null) ||
+			proposal.BidProposalItems is null || proposal.BidProposalItems.Any(item => item is null))
+		{
+			return false;
+		}
+		return QuoteAmount.TrySum(new[] { command.PickupCharges, command.HandlingCharges, command.CustomClearanceCharges }
+			.Concat(command.BidCustomCharges.Select(charge => charge.Amount))
+			.Concat(proposal.BidProposalItems.Select(item => item.ItemTotal)), out total);
 	}
 	internal sealed class Handler(CourierJobDbContext jobDbContext,
 		IValidator<Command> validator,
@@ -129,7 +150,7 @@ public class CreateBid
 	{
 		public async Task<Result<CreateUpdateBidResult>> Handle(Command request, CancellationToken cancellationToken)
 		{
-			var validationResult = await validator.ValidateAsync(request);
+			var validationResult = await validator.ValidateAsync(request, cancellationToken);
 			if (!validationResult.IsValid)
 			{
 				return new Error(validationResult.ToString());
@@ -165,13 +186,31 @@ public class CreateBid
 				.ToArray();
 			if (proposalItemIds.Length > 0)
 			{
-				var validItemCount = await jobDbContext.JobItems.CountAsync(
-					item => item.JobId == request.JobId && proposalItemIds.Contains(item.Id),
-					cancellationToken);
-				if (validItemCount != proposalItemIds.Length)
+				var items = await jobDbContext.JobItems
+					.Where(item => item.JobId == request.JobId && proposalItemIds.Contains(item.Id))
+					.ToDictionaryAsync(item => item.Id, cancellationToken);
+				if (items.Count != proposalItemIds.Length)
 				{
 					return new Error("One or more job items do not belong to this job");
 				}
+				foreach (var line in request.BidProposals.SelectMany(proposal => proposal.BidProposalItems))
+				{
+					var quantity = items[line.JobItemId!.Value].Quantity;
+					if (quantity is null or <= 0 || line.UnitPrice * quantity.Value != line.ItemTotal)
+					{
+						return new Error("Item total must equal unit price times the shipment item quantity");
+					}
+				}
+			}
+
+			var quotes = new List<(BidProposalCommand Proposal, decimal Total)>();
+			foreach (var proposal in request.BidProposals)
+			{
+				if (!TryProposalTotal(request, proposal, out var total))
+				{
+					return new Error("Quote total is outside the supported amount limit");
+				}
+				quotes.Add((proposal, total));
 			}
 
 			if (job.JobStatusId == (int)JobStatusEnum.Open)
@@ -185,28 +224,27 @@ public class CreateBid
 				JobId = request.JobId,
 				UserId = request.UserId,
 				IsInsurancePolicy = request.IsInsurancePolicy,
-				PickupCharges = request.PickupCharges,
-				HandlingCharges = request.HandlingCharges,
-				CustomClearanceCharges = request.CustomClearanceCharges,
-				TotalAmount = request.TotalAmount is not null ? (double)request.TotalAmount :
-					request.BidProposals.Min(x => x.Total),
+				PickupCharges = (double)request.PickupCharges,
+				HandlingCharges = (double)request.HandlingCharges,
+				CustomClearanceCharges = (double)request.CustomClearanceCharges,
+				TotalAmount = (double)quotes.Single(quote => quote.Proposal.IsBaseBid == true).Total,
 				BiddingCharges = request.BidCustomCharges.Select(x => new BiddingCharge
 				{
-					Amount = x.Amount,
+					Amount = (double)x.Amount,
 					Description = x.Description,
 					Name = x.Name
 				}).ToList(),
-				BiddingProposals = request.BidProposals.Select(x => new BiddingProposal
+				BiddingProposals = quotes.Select(quote => new BiddingProposal
 				{
-					IsBaseBid = x.IsBaseBid,
-					DeliveryTypeId = x.DeliveryTypeId,
-					DeliveryDateUtc = x.DeliveryDate!.Value.ToUniversalTime(),
-					Total = x.Total,
-					BiddingProposalItems = x.BidProposalItems.Select(y => new BiddingProposalItem
+					IsBaseBid = quote.Proposal.IsBaseBid,
+					DeliveryTypeId = quote.Proposal.DeliveryTypeId,
+					DeliveryDateUtc = quote.Proposal.DeliveryDate!.Value.ToUniversalTime(),
+					Total = (double)quote.Total,
+					BiddingProposalItems = quote.Proposal.BidProposalItems.Select(y => new BiddingProposalItem
 					{
-						ItemTotal = y.ItemTotal,
+						ItemTotal = (double)y.ItemTotal,
 						JobItemId = y.JobItemId,
-						UnitPrice = y.UnitPrice
+						UnitPrice = (double)y.UnitPrice
 					}).ToList()
 				}).ToList()
 			};

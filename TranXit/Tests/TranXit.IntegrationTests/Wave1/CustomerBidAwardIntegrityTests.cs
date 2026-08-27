@@ -226,7 +226,7 @@ public sealed class CustomerBidAwardIntegrityTests(SqlContainerFixture fixture) 
 		winner.GetProperty("bidStatusId").GetInt32().Should().Be(3);
 		winner.GetProperty("bidProposalIds").EnumerateArray().Select(id => id.GetInt32()).Should().BeEquivalentTo([100, 102]);
 		winner.GetProperty("bidProposals").EnumerateArray().Select(proposal => proposal.GetProperty("total").GetDouble())
-			.Should().BeEquivalentTo([1000.0, 1200.0]);
+			.Should().BeEquivalentTo([1200.0, 1400.0]);
 		offers.Should().OnlyContain(offer => !offer.GetProperty("canAccept").GetBoolean() && offer.GetProperty("isJobAwarded").GetBoolean());
 		var loser = offers.Single(offer => offer.GetProperty("bidId").GetInt32() == 11);
 		loser.GetProperty("courierName").GetString().Should().Be("Second Courier");
@@ -451,8 +451,8 @@ public sealed class CustomerBidAwardIntegrityTests(SqlContainerFixture fixture) 
 		var bids = await db.Biddings.OrderBy(bid => bid.Id).ToListAsync();
 		bids.Should().ContainSingle(bid => bid.JobStatusId == 3).Which.Id.Should().Be(bidId);
 		bids.Single(bid => bid.Id != bidId).JobStatusId.Should().Be(4);
-		bids.Single(bid => bid.Id != bidId).TotalAmount.Should().Be(bidId == 10 ? 1375 : 1175);
-		bids.Single(bid => bid.Id == bidId).TotalAmount.Should().Be(proposalId == 102 ? 1200 : 1300);
+		bids.Single(bid => bid.Id != bidId).TotalAmount.Should().Be(bidId == 10 ? 1610 : 1200);
+		bids.Single(bid => bid.Id == bidId).TotalAmount.Should().Be(proposalId == 102 ? 1400 : 1610);
 		(await db.BiddingProposals.CountAsync()).Should().Be(4);
 		(await db.BiddingProposalItems.CountAsync()).Should().Be(4);
 	}
@@ -512,19 +512,20 @@ public sealed class CustomerBidAwardIntegrityTests(SqlContainerFixture fixture) 
 		await db.Database.ExecuteSqlRawAsync("""
 			SET IDENTITY_INSERT [Biddings] ON;
 			INSERT INTO [Biddings] ([Id], [UserId], [JobId], [TotalAmount], [IsInsurancePolicy], [PickupCharges], [HandlingCharges], [CustomClearanceCharges], [JobStatusId])
-			VALUES (10, 2, 1, 1175, 1, 100, 50, 25, NULL), (11, 5, 1, 1375, 1, 150, 100, 25, 1);
+			VALUES (10, 2, 1, 1200, 1, 100, 50, 25, NULL), (11, 5, 1, 1610, 1, 150, 100, 25, 1);
 			SET IDENTITY_INSERT [Biddings] OFF;
 			SET IDENTITY_INSERT [BiddingProposals] ON;
 			INSERT INTO [BiddingProposals] ([Id], [BiddingId], [DeliveryTypeId], [IsBaseBid], [DeliveryDateUtc], [Total])
-			VALUES (100, 10, 1, 1, DATEADD(day, 3, SYSUTCDATETIME()), 1000),
-			       (102, 10, 2, 0, DATEADD(day, 8, SYSUTCDATETIME()), 1200),
-			       (101, 11, 1, 1, DATEADD(day, 6, SYSUTCDATETIME()), 1300),
-			       (103, 11, 3, 0, DATEADD(day, 9, SYSUTCDATETIME()), 1500);
+			VALUES (100, 10, 1, 1, DATEADD(day, 3, SYSUTCDATETIME()), 1200),
+			       (102, 10, 2, 0, DATEADD(day, 8, SYSUTCDATETIME()), 1400),
+			       (101, 11, 1, 1, DATEADD(day, 6, SYSUTCDATETIME()), 1610),
+			       (103, 11, 3, 0, DATEADD(day, 9, SYSUTCDATETIME()), 1810);
 			SET IDENTITY_INSERT [BiddingProposals] OFF;
 			INSERT INTO [BiddingProposalItems] ([BiddingProposalId], [JobItemId], [UnitPrice], [ItemTotal])
 			VALUES (100, 1, 100, 1000), (102, 1, 120, 1200), (101, 1, 130, 1300), (103, 1, 150, 1500);
 			INSERT INTO [BiddingCharges] ([BiddingId], [Name], [Description], [Amount])
 			VALUES (10, 'Test charge', 'Retained quoted charge', 25), (11, 'Other charge', 'Retained losing charge', 35);
+			UPDATE [JobItems] SET [Quantity] = 10 WHERE [Id] = 1;
 			""");
 	}
 
