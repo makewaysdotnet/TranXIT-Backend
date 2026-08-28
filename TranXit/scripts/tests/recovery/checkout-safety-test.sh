@@ -20,7 +20,7 @@ for name in backend frontend; do
   printf 'source fixture\n' > "$root/source.txt"
   if [ "$name" = backend ]; then
     mkdir -p "$root/TranXit/scripts"
-    for script in deploy backup restore smoke verify-production-topology; do
+    for script in deploy backup restore smoke verify-production-topology admission-contract; do
       printf '# fixture source\n' > "$root/TranXit/scripts/$script.sh"
     done
   fi

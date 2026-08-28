@@ -5,6 +5,7 @@ umask 077
 [[ "${F01_PROJECT:-}" =~ ^tranxit-f01-test-[a-f0-9]{16}$ ]] || exit 78
 export LC_ALL=C
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null
+export TRANXIT_DEPLOY_PROJECT_DIR=/work/backend/TranXit
 
 all_stopped() {
   local id state service
@@ -25,7 +26,7 @@ sentinels() {
 run_deploy() {
   local flags=()
   [ "$F01_FIRST" != true ] || flags+=(--allow-first-deploy)
-  bash /work/backend/TranXit/scripts/deploy.sh --env staging --sha "$F01_TARGET_SHA" \
+  flock --shared /work/controller.lock bash /work/controller/scripts/deploy.sh --env staging --sha "$F01_TARGET_SHA" \
     --frontend-ref "$F01_TARGET_FRONTEND" --migration-policy "$F01_POLICY" "${flags[@]}"
 }
 
@@ -109,6 +110,59 @@ invalid_config_test() {
   printf 'PASS: %s (exit=2 Docker=0 unchanged-state accounts=4 jobs=4 origins=2)\n' "$F01_CASE"
 }
 
+artifact_rejection_test() {
+  # UC-NFR-9 - T-NFR-9.RuntimeAdmissionArtifact (real Git artifacts and running green services).
+  local role="$1" ref="$2" status=0 log="/work/state/$F01_CASE.raw.log" protected_path
+  . /work/refs.env
+  case "$ref" in
+    "$BAD_historical"|"$BAD_gate_removed") protected_path=TranXit/ops/Caddyfile ;;
+    "$BAD_wrong_mount") protected_path=TranXit/docker-compose.prod.yml ;;
+    *) fail 'Artifact refusal requires a known negative fixture'; return 1 ;;
+  esac
+  set -a; . /work/env.staging; set +a
+  export TRANXIT_IMAGE_TAG="${GREEN_BACKEND:0:12}" F01_FAULT_POINTS='' F01_PERSISTENT=false
+  export F01_TARGET_SHA="$CANDIDATE_BACKEND" F01_TARGET_FRONTEND="$CANDIDATE_FRONTEND"
+  if [ "$role" = candidate ]; then F01_TARGET_SHA="$ref"
+  elif [ "$role" = rollback ]; then
+    sed "s/^backend_sha=.*/backend_sha=$ref/" /work/state/green.marker > /work/markers/last-staging-green
+  else return 1; fi
+  /bin/rm -f /work/state/recovering
+  printf 0 > /work/state/sequence
+  : > "/work/state/$F01_CASE_KEY.accounts"; : > "/work/state/$F01_CASE_KEY.jobs"
+  touch /work/state/probes-enabled
+  probe artifact-before-primary open
+  probe artifact-before-secondary open
+  /bin/rm -f /work/state/probes-enabled
+  : > /work/state/docker-events
+  snapshot_preflight_state artifact > "/work/state/$F01_CASE.before"
+  run_deploy > "$log" 2>&1 || status=$?
+  sanitize < "$log" > "/work/public-results/$F01_CASE.log"
+  snapshot_preflight_state artifact > "/work/state/$F01_CASE.after"
+  sanitize < "/work/state/$F01_CASE.before" > "/work/public-results/$F01_CASE.before-state.txt"
+  sanitize < "/work/state/$F01_CASE.after" > "/work/public-results/$F01_CASE.after-state.txt"
+  [ "$status" = 2 ] || { fail "$F01_CASE expected artifact refusal 2, got $status"; return 1; }
+  [ ! -s /work/state/docker-events ] || { fail "$F01_CASE reached Docker before artifact refusal"; return 1; }
+  cmp "/work/state/$F01_CASE.before" "/work/state/$F01_CASE.after" >/dev/null || {
+    fail "$F01_CASE changed the running release, artifacts, markers or data"; return 1;
+  }
+  grep -Fx "$role admission contract rejected: $protected_path (checksum mismatch)." "$log" >/dev/null || {
+    fail "$F01_CASE did not fail on the expected artifact checksum"; return 1;
+  }
+  touch /work/state/probes-enabled
+  probe artifact-after-primary open
+  probe artifact-after-secondary open
+  /bin/rm -f /work/state/probes-enabled
+  assert_writes "$F01_CASE_KEY"
+  assert_writes "$(cat /work/state/baseline.key)"
+  [ "$(wc -l < "/work/state/$F01_CASE_KEY.accounts")" = 4 ]
+  [ "$(wc -l < "/work/state/$F01_CASE_KEY.jobs")" = 4 ]
+  if [ "$role" = rollback ]; then cp /work/state/green.marker /work/markers/last-staging-green; fi
+  jq -nc --arg test "$F01_CASE" --arg role "$role" --arg ref "$ref" --arg path "$protected_path" \
+    '{test:$test,outcome:"passed",role:$role,artifact:$ref,protectedPath:$path,exitStatus:2,deployDockerCalls:0,
+      stateUnchanged:true,publicOrigins:2,accountWrites:4,jobWrites:4,restores:"0|0"}' >> /work/public-results/cases.jsonl
+  printf 'PASS: %s (artifact refused; Docker=0 unchanged-state accounts=4 jobs=4)\n' "$F01_CASE"
+}
+
 case_test() {
   # UC-NFR-9 - T-NFR-9.RuntimeDeploymentMatrix (case-specific assertions below).
   . /work/refs.env
@@ -117,6 +171,9 @@ case_test() {
   mkdir -p /work/state /work/public-results
   find /work/state -maxdepth 1 -name 'hit-*' -delete
   /bin/rm -f /work/state/recovering
+  /bin/rm -f /work/state/restore-order-violations
+  mkdir -p /work/state/verified-stops
+  /bin/rm -f /work/state/verified-stops/{caddy,frontend,ocelotapigw,accountservice,courierjobservice}
   printf '0' > /work/state/sequence
   : > "/work/state/$F01_CASE_KEY.accounts"; : > "/work/state/$F01_CASE_KEY.jobs"
   : > /work/state/docker-events
@@ -127,6 +184,9 @@ case_test() {
   run_deploy > "/work/state/$F01_CASE.raw.log" 2>&1 || status=$?
   /bin/rm -f /work/state/probes-enabled
   sanitize < "/work/state/$F01_CASE.raw.log" > "/work/public-results/$F01_CASE.log"
+  [ ! -s /work/state/restore-order-violations ] || {
+    fail 'T-NFR-9.VerifiedStopBeforeRestore: restore was attempted without the preceding verified fence'; return 1;
+  }
   [ "$status" -eq "$F01_EXPECT_STATUS" ] || { fail "$F01_CASE exit expected $F01_EXPECT_STATUS, got $status (see sanitized log)"; return 1; }
   for point in ${F01_FAULT_POINTS//,/ }; do
     [ -f "/work/state/hit-$point" ] || { fail "$F01_CASE did not reach fault $point"; return 1; }
@@ -204,6 +264,7 @@ case_test() {
 
 if [ "${1:-}" = --case ]; then case_test; exit; fi
 if [ "${1:-}" = --invalid-config ]; then invalid_config_test "${2:-}" "${3:-}"; exit; fi
+if [ "${1:-}" = --artifact ]; then artifact_rejection_test "${2:-}" "${3:-}"; exit; fi
 
 mkdir -p /work/state /work/public-results /work/markers /work/backups /work/origins
 finish() {
@@ -212,6 +273,7 @@ finish() {
   /bin/rm -f /work/state/probes-enabled
   if [ -f /work/state/driver.log ]; then sanitize < /work/state/driver.log > /work/public-results/driver.log; fi
   if [ -f /work/state/credibility.out ]; then sanitize < /work/state/credibility.out > /work/public-results/credibility-red.log; fi
+  if [ -f /work/state/fence-credibility.out ]; then sanitize < /work/state/fence-credibility.out > /work/public-results/fence-credibility-red.log; fi
   if [ "$status" -ne 0 ]; then printf 'FAIL: recovery controller stopped (exit %s); sanitized logs are retained for export.\n' "$status"; fi
   exit "$status"
 }
@@ -233,8 +295,10 @@ prepare_repo() {
   # A PR checkout can point at a detached commit; only the private clone gets a branch.
   git -C "/work/$name" checkout -q -B main
   if [ "$name" = backend ]; then
-    for script in deploy backup restore smoke verify-production-topology; do
-      cp "/source/backend/TranXit/scripts/$script.sh" "/work/backend/TranXit/scripts/$script.sh"
+    for script in deploy backup restore smoke verify-production-topology admission-contract; do
+      # Compatible application history must not supply the next deployment's controller.
+      printf '#!/usr/bin/env bash\n# fixture app controller: green\necho UNTRUSTED_APP_CONTROLLER >&2\nexit 77\n' \
+        > "/work/backend/TranXit/scripts/$script.sh"
       chmod +x "/work/backend/TranXit/scripts/$script.sh"
     done
     git -C /work/backend add TranXit/scripts
@@ -243,6 +307,12 @@ prepare_repo() {
   git -C "/work/$name" add recovery-release.txt
   git -C "/work/$name" commit -m 'fixture: known-green release' >/dev/null
   printf 'GREEN_%s=%s\n' "${name^^}" "$(git -C "/work/$name" rev-parse HEAD)" >> /work/refs.env
+  if [ "$name" = backend ]; then
+    for script in deploy backup restore smoke verify-production-topology admission-contract; do
+      sed -i 's/fixture app controller: green/fixture app controller: candidate/' "/work/backend/TranXit/scripts/$script.sh"
+    done
+    git -C /work/backend add TranXit/scripts
+  fi
   printf 'candidate\n' > "/work/$name/recovery-release.txt"
   git -C "/work/$name" add recovery-release.txt
   git -C "/work/$name" commit -m 'fixture: candidate release' >/dev/null
@@ -257,9 +327,43 @@ prepare_repo backend
 prepare_repo frontend
 if [ "${1:-}" = --prepare-repos ]; then exit; fi
 . /work/refs.env
-cp /source/backend/TranXit/ops/Caddyfile.staging /work/settings/Caddyfile
-cp /work/backend/TranXit/scripts/deploy.sh /work/state/original-deploy.sh
-sha256sum /work/backend/TranXit/scripts/{deploy,backup,restore,smoke,verify-production-topology}.sh > /work/public-results/source-hashes.txt
+
+mkdir -p /work/controllers/reviewed/scripts
+for script in deploy backup restore smoke verify-production-topology admission-contract; do
+  cp "/source/backend/TranXit/scripts/$script.sh" "/work/controllers/reviewed/scripts/$script.sh"
+  chmod 500 "/work/controllers/reviewed/scripts/$script.sh"
+done
+ln -s /work/controllers/reviewed /work/controller
+
+prepare_rejected_artifacts() {
+  local variant
+  for variant in historical gate-removed wrong-mount; do
+    git -C /work/backend checkout -q -B "artifact-$variant" "$CANDIDATE_BACKEND"
+    case "$variant" in
+      historical)
+        git -C /work/backend show 57d05712be91bf8d001ce51ae90a235c8ac97133:TranXit/ops/Caddyfile \
+          > /work/backend/TranXit/ops/Caddyfile
+        ;;
+      gate-removed)
+        sed -i 's/import public_tranxit_site/import tranxit_site/' /work/backend/TranXit/ops/Caddyfile{,.staging}
+        ;;
+      wrong-mount)
+        sed -i 's#target: /run/tranxit/admission#target: /run/tranxit/not-admission#' /work/backend/TranXit/docker-compose.prod.yml
+        ;;
+    esac
+    git -C /work/backend add TranXit/ops/Caddyfile TranXit/ops/Caddyfile.staging TranXit/docker-compose.prod.yml
+    git -C /work/backend commit -qm "fixture: unsupported $variant admission artifact"
+    printf '%s=%s\n' "BAD_${variant//-/_}" "$(git -C /work/backend rev-parse HEAD)" >> /work/refs.env
+    git -C /work/backend push origin "artifact-$variant" >/dev/null 2>&1
+  done
+  git -C /work/backend checkout -q main
+  git -C /work/backend fetch origin >/dev/null 2>&1
+}
+prepare_rejected_artifacts
+. /work/refs.env
+install_fixture_edge_artifact
+cp /work/controller/scripts/deploy.sh /work/state/original-deploy.sh
+sha256sum /work/controllers/reviewed/scripts/{deploy,backup,restore,smoke,verify-production-topology,admission-contract}.sh > /work/public-results/source-hashes.txt
 sha256sum /harness/*.sh /harness/compose.yml /harness/runtime.mjs /harness/Dockerfile > /work/public-results/harness-hashes.txt
 /usr/local/bin/docker-real version --format '{{json .}}' > /work/public-results/docker-version.json
 /usr/local/bin/docker-real compose version > /work/public-results/compose-version.txt
@@ -340,6 +444,39 @@ run_invalid_config_cases() {
   for key in "${keys[@]}"; do assert_writes "$key"; done
 }
 
+run_rejected_artifacts() {
+  local role variant key ref keys=()
+  for role in candidate rollback; do
+    for variant in historical gate-removed wrong-mount; do
+      key="BAD_${variant//-/_}"
+      ref="${!key}"
+      case_number=$((case_number + 1))
+      export F01_CASE="Artifact-$role-$variant" F01_CASE_KEY="c$case_number-$(openssl rand -hex 3)"
+      export F01_POLICY=restore-required
+      echo "[recovery] Running $F01_CASE."
+      bash /harness/controller.sh --artifact "$role" "$ref"
+      keys+=("$F01_CASE_KEY")
+    done
+  done
+  for key in "${keys[@]}"; do assert_writes "$key"; done
+}
+
+controller_persistence_test() {
+  # UC-NFR-9 - T-NFR-9.RuntimeControllerPersistence (no checkout/reset between attempts).
+  local previous="$1" expected_sha="$2"
+  [ "$(git -C /work/backend rev-parse HEAD)" = "$expected_sha" ]
+  grep -Fx "# fixture app controller: $previous" /work/backend/TranXit/scripts/deploy.sh >/dev/null
+  sha256sum --status -c /work/public-results/source-hashes.txt
+  case_number=$((case_number + 1))
+  export F01_CASE="ControllerAfter-$previous" F01_CASE_KEY="c$case_number-$(openssl rand -hex 3)"
+  export F01_POLICY=restore-required
+  echo "[recovery] Running $F01_CASE without replacing the previous application's scripts."
+  bash /harness/controller.sh --artifact candidate "$BAD_gate_removed"
+  [ "$(git -C /work/backend rev-parse HEAD)" = "$expected_sha" ]
+  grep -Fx "# fixture app controller: $previous" /work/backend/TranXit/scripts/deploy.sh >/dev/null
+  sha256sum --status -c /work/public-results/source-hashes.txt
+}
+
 reset_to_baseline() {
   /bin/rm -f /work/state/probes-enabled
   export TRANXIT_IMAGE_TAG="${GREEN_BACKEND:0:12}"
@@ -348,15 +485,16 @@ reset_to_baseline() {
   if [ -f /work/markers/restore-staging-in-progress ]; then
     local unfinished
     unfinished="$(awk -F= '/^manifest=/{print substr($0,10)}' /work/markers/restore-staging-in-progress)"
-    bash /work/backend/TranXit/scripts/restore.sh --env staging --manifest "$unfinished" \
+    bash /work/controller/scripts/restore.sh --env staging --manifest "$unfinished" \
       --account-database Tranxit_Account --courier-database Tranxit_CourierJob --replace-live --confirm RESTORE-LIVE-staging >>/work/state/driver.log 2>&1
   fi
-  bash /work/backend/TranXit/scripts/restore.sh --env staging --manifest "$BASELINE_MANIFEST" \
+  bash /work/controller/scripts/restore.sh --env staging --manifest "$BASELINE_MANIFEST" \
     --account-database Tranxit_Account --courier-database Tranxit_CourierJob --replace-live --confirm RESTORE-LIVE-staging >>/work/state/driver.log 2>&1
   /bin/rm -f /work/markers/deploy-staging-admitted /work/markers/last-staging-green.prev
   cp /work/state/green.marker /work/markers/last-staging-green
   git -C /work/backend checkout --detach "$GREEN_BACKEND" >>/work/state/driver.log 2>&1
   git -C /work/frontend checkout --detach "$GREEN_FRONTEND" >>/work/state/driver.log 2>&1
+  install_fixture_edge_artifact
   raw_compose up -d --no-deps --wait --wait-timeout 180 accountservice courierjobservice >>/work/state/driver.log 2>&1
   raw_compose up -d --no-deps --wait --wait-timeout 180 ocelotapigw frontend caddy >>/work/state/driver.log 2>&1
   printf 'fixture baseline admitted\n' > /work/markers/admission-staging/open
@@ -382,13 +520,19 @@ cp /work/markers/last-staging-green /work/state/green.marker
 /bin/rm -f /work/state/probes-enabled
 export F01_FIRST=false F01_TARGET_SHA="$CANDIDATE_BACKEND" F01_TARGET_FRONTEND="$CANDIDATE_FRONTEND"
 run_invalid_config_cases
-bash /work/backend/TranXit/scripts/backup.sh --env staging --release-id baseline > /work/state/baseline-backup.log 2>&1
+run_rejected_artifacts
+bash /work/controller/scripts/backup.sh --env staging --release-id baseline > /work/state/baseline-backup.log 2>&1
 BASELINE_MANIFEST="$(awk -F= '/^MANIFEST=/{print substr($0,10)}' /work/state/baseline-backup.log)"
 [ -f "$BASELINE_MANIFEST" ]
 export F01_FIRST=false F01_TARGET_SHA="$CANDIDATE_BACKEND" F01_TARGET_FRONTEND="$CANDIDATE_FRONTEND"
 
 reset_to_baseline
 run_case CandidateSuccess expand-contract '' 0 success '1|1' '0|0'
+controller_persistence_test candidate "$CANDIDATE_BACKEND"
+reset_to_baseline
+export F01_BREAK_PUBLIC_PROBE_TLS=true
+run_case UnverifiedPublicEdge restore-required '' 1 fenced '1|1' '0|0' 'Public origin 1 did not prove closed admission' true
+export F01_BREAK_PUBLIC_PROBE_TLS=false
 reset_to_baseline
 run_case ConfigFailure expand-contract forward:config 91 unchanged '0|0' '0|0'
 reset_to_baseline
@@ -402,6 +546,7 @@ export TRANXIT_DEPLOY_TEST_FORCE_SMOKE_FAILURE=true
 run_case PreAdmissionExpand expand-contract '' 1 recovered '1|1' '0|0'
 reset_to_baseline
 run_case PreAdmissionRestore restore-required '' 1 recovered '0|0' '1|1'
+controller_persistence_test green "$GREEN_BACKEND"
 reset_to_baseline
 export TRANXIT_DEPLOY_TEST_FORCE_SMOKE_FAILURE=false TRANXIT_DEPLOY_TEST_FORCE_POST_ADMISSION_FAILURE=true
 run_case PostAdmissionExpand expand-contract '' 1 recovered '1|1' '0|0'
@@ -426,8 +571,9 @@ run_case StopVerificationFailure restore-required forward:stop-edge-before,forwa
 
 reset_to_baseline
 echo '[recovery] Credibility mutation: remove only the post-admission restore refusal in the private script copy.'
-sed -i '/if \[ "\$admission_may_have_opened" = "true" \] ||/,+1c\      if false; then' /work/backend/TranXit/scripts/deploy.sh
-git -C /work/backend diff -- TranXit/scripts/deploy.sh > /work/public-results/credibility.diff
+sed -i '/if \[ "\$admission_may_have_opened" = "true" \] ||/,+1c\      if false; then' /work/controllers/reviewed/scripts/deploy.sh
+diff -u --label reviewed/deploy.sh --label mutated/deploy.sh /work/state/original-deploy.sh \
+  /work/controllers/reviewed/scripts/deploy.sh > /work/public-results/credibility.diff || [ "$?" = 1 ]
 grep -F '+      if false; then' /work/public-results/credibility.diff >/dev/null
 export TRANXIT_DEPLOY_TEST_FORCE_POST_ADMISSION_FAILURE=true
 if run_case CredibilityRed restore-required '' 1 fenced '1|1' '0|0' 'AUTOMATIC RESTORE REFUSED' true > /work/state/credibility.out 2>&1; then
@@ -438,10 +584,35 @@ grep -F 'T-NFR-9.AcknowledgedWritesPreserved' /work/state/credibility.out >/dev/
   fail 'Credibility failed for an unexpected reason; see credibility-red.log (not valid red evidence).'; exit 1;
 }
 echo 'PASS: CredibilityRed caught acknowledged-write loss.'
-cp /work/state/original-deploy.sh /work/backend/TranXit/scripts/deploy.sh
-cmp /source/backend/TranXit/scripts/deploy.sh /work/backend/TranXit/scripts/deploy.sh >/dev/null
+cp /work/state/original-deploy.sh /work/controllers/reviewed/scripts/deploy.sh
+cmp /source/backend/TranXit/scripts/deploy.sh /work/controllers/reviewed/scripts/deploy.sh >/dev/null
 reset_to_baseline
 run_case CredibilityRestored restore-required '' 1 fenced '1|1' '0|0' 'AUTOMATIC RESTORE REFUSED' true
 
-jq -s '{passed:length,cases:.,credibility:"unsafe restore red; restored source green"}' /work/public-results/cases.jsonl > /work/public-results/summary.json
+reset_to_baseline
+echo '[recovery] Credibility mutation: omit the recovery fence before paired restore in the private controller.'
+awk '
+  /^rollback_known_green\(\) \{/ { recovery=1 }
+  recovery && /^  fence_application_stack \|\| return \$\?$/ { print "  : # mutation: recovery fence omitted"; recovery=0; count++; next }
+  { print }
+  END { if (count != 1) exit 1 }
+' /work/state/original-deploy.sh > /work/state/fence-mutated.sh
+cp /work/state/fence-mutated.sh /work/controllers/reviewed/scripts/deploy.sh
+diff -u --label reviewed/deploy.sh --label mutated/deploy.sh /work/state/original-deploy.sh \
+  /work/controllers/reviewed/scripts/deploy.sh > /work/public-results/fence-credibility.diff || [ "$?" = 1 ]
+export TRANXIT_DEPLOY_TEST_FORCE_POST_ADMISSION_FAILURE=false TRANXIT_DEPLOY_TEST_FORCE_SMOKE_FAILURE=true
+if run_case FenceOrderRed restore-required '' 1 recovered '0|0' '1|1' > /work/state/fence-credibility.out 2>&1; then
+  fail 'Credibility check failed: missing pre-restore fence passed'; exit 1
+fi
+sanitize < /work/state/fence-credibility.out > /work/public-results/fence-credibility-red.log
+grep -F 'T-NFR-9.VerifiedStopBeforeRestore' /work/state/fence-credibility.out >/dev/null || {
+  fail 'Fence credibility failed for an unexpected reason (not valid red evidence).'; exit 1;
+}
+echo 'PASS: FenceOrderRed caught missing verified stop before restore.'
+cp /work/state/original-deploy.sh /work/controllers/reviewed/scripts/deploy.sh
+cmp /source/backend/TranXit/scripts/deploy.sh /work/controllers/reviewed/scripts/deploy.sh >/dev/null
+reset_to_baseline
+run_case FenceOrderRestored restore-required '' 1 recovered '0|0' '1|1'
+
+jq -s '{passed:length,cases:.,credibility:"unsafe restore and missing verified fence red; restored source green"}' /work/public-results/cases.jsonl > /work/public-results/summary.json
 echo '[recovery] Full runtime matrix and credibility check passed. Real deployment remains unapproved.'

@@ -16,6 +16,7 @@ Migration policy:
 Environment:
   TRANXIT_ENV_FILE      Defaults to /opt/tranxit/.env.
   TRANXIT_FRONTEND_DIR  Defaults to ../../frontend from the backend repo root.
+  TRANXIT_DEPLOY_PROJECT_DIR  Application project; set explicitly for the installed controller.
 USAGE
 }
 
@@ -81,8 +82,9 @@ if [ "$MIGRATION_POLICY" != "expand-contract" ] &&
   exit 2
 fi
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+# The supported entrypoint is installed outside the checkout; retain its immutable physical path.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+PROJECT_DIR="$(cd "${TRANXIT_DEPLOY_PROJECT_DIR:-$SCRIPT_DIR/..}" && pwd -P)"
 BACKEND_REPO_DIR="$(git -C "$PROJECT_DIR" rev-parse --show-toplevel)"
 ENV_FILE="${TRANXIT_ENV_FILE:-/opt/tranxit/.env}"
 
@@ -117,6 +119,10 @@ validate_deploy_inputs() {
 # Parameter-expansion errors bypass ERR recovery; reject required inputs before any state change.
 validate_deploy_inputs || exit $?
 readonly PUBLIC_APP_URL STAGING_APP_URL TRANXIT_EGRESS_PROBE_URL
+
+# Load the trusted contract once; a candidate cannot supply its own admission policy.
+# shellcheck source=admission-contract.sh
+. "$SCRIPT_DIR/admission-contract.sh" || exit 2
 
 MARKER_DIR="${TRANXIT_MARKER_DIR:-/opt/tranxit}"
 MARKER_FILE="$MARKER_DIR/last-$TARGET_ENV-green"
@@ -200,6 +206,7 @@ application_services=(caddy frontend ocelotapigw accountservice courierjobservic
 stateful_services=(sqlserver rabbitmq)
 
 close_public_admission() {
+  closed_edge_verified=false
   rm -f -- "$ADMISSION_OPEN" || return $?
   if [ -e "$ADMISSION_OPEN" ] || [ -L "$ADMISSION_OPEN" ]; then
     echo "Public admission could not be closed; external fencing is required." >&2
@@ -222,8 +229,9 @@ record_public_admission() {
 
 open_public_admission() {
   local open_tmp
-  if [ ! -f "$ADMISSION_STATE" ] || [ -e "$ADMISSION_OPEN" ] || [ -L "$ADMISSION_OPEN" ]; then
-    echo "Refusing admission without a persisted boundary and a closed gate." >&2
+  if [ "${closed_edge_verified:-false}" != true ] || [ ! -f "$ADMISSION_STATE" ] ||
+     [ -e "$ADMISSION_OPEN" ] || [ -L "$ADMISSION_OPEN" ]; then
+    echo "Refusing admission without a persisted boundary and a verified closed edge." >&2
     return 1
   fi
   open_tmp="$(mktemp "$TRANXIT_ADMISSION_DIR/.open.XXXXXX")" || return $?
@@ -246,13 +254,20 @@ fence_application_stack() {
 }
 
 start_application_stack() {
+  local status=0
+  closed_edge_verified=false
   if [ "$TARGET_ENV" = "staging" ]; then
     compose up -d --no-deps --wait --wait-timeout 300 mailpit || return $?
   fi
   compose up -d --no-deps --wait --wait-timeout 300 accountservice courierjobservice || return $?
   compose up -d --no-deps --wait --wait-timeout 300 ocelotapigw || return $?
   compose up -d --no-deps --wait --wait-timeout 300 frontend || return $?
-  compose up -d --no-deps --wait --wait-timeout 300 caddy || return $?
+  compose up -d --no-deps --wait --wait-timeout 300 caddy || status=$?
+  if [ "$status" -ne 0 ]; then
+    preserve_unverified_admission
+    return "$status"
+  fi
+  verify_closed_public_edge || return $?
 }
 
 stop_application_stack() {
@@ -357,6 +372,83 @@ writers_stopped="false"
 migration_started="false"
 admission_may_have_opened="false"
 marker_commit_started="false"
+closed_edge_verified=false
+active_backend_sha=""
+active_frontend_sha=""
+CONTROLLER_DIR=""
+
+snapshot_controller() {
+  local helper
+  CONTROLLER_DIR="$(mktemp -d "$MARKER_DIR/.deploy-controller.XXXXXXXX")" || return 1
+  trap cleanup_controller EXIT
+  for helper in backup restore smoke verify-production-topology; do
+    if [ ! -f "$SCRIPT_DIR/$helper.sh" ] || [ -L "$SCRIPT_DIR/$helper.sh" ]; then
+      echo "Trusted deployment helper is missing or a symlink: $helper.sh" >&2
+      return 1
+    fi
+    cp -- "$SCRIPT_DIR/$helper.sh" "$CONTROLLER_DIR/$helper.sh" || return 1
+    chmod 500 "$CONTROLLER_DIR/$helper.sh" || return 1
+  done
+}
+
+cleanup_controller() {
+  local status=$?
+  trap - EXIT
+  case "$CONTROLLER_DIR" in
+    "$MARKER_DIR"/.deploy-controller.*)
+      if [ -d "$CONTROLLER_DIR" ] && [ ! -L "$CONTROLLER_DIR" ]; then
+        rm -f -- "$CONTROLLER_DIR/backup.sh" "$CONTROLLER_DIR/restore.sh" \
+          "$CONTROLLER_DIR/smoke.sh" "$CONTROLLER_DIR/verify-production-topology.sh"
+        rmdir -- "$CONTROLLER_DIR" || echo 'Warning: trusted helper snapshot cleanup needs attention.' >&2
+      fi
+      ;;
+  esac
+  exit "$status"
+}
+
+preserve_unverified_admission() {
+  # An unverified edge may already have acknowledged writes, even with no open sentinel.
+  admission_may_have_opened=true
+  echo 'Public admission is unverified; automatic database restore is prohibited.' >&2
+  record_public_admission "$active_backend_sha" "$active_frontend_sha" || {
+    echo 'Could not persist the unverified-admission journal; external fencing and manual reconciliation are required.' >&2
+    return 1
+  }
+}
+
+verify_closed_public_edge() {
+  local origin response status attempt ready index=0
+  closed_edge_verified=false
+  if [ -e "$ADMISSION_OPEN" ] || [ -L "$ADMISSION_OPEN" ]; then
+    preserve_unverified_admission || true
+    return 1
+  fi
+  for origin in "$PUBLIC_APP_URL" "$STAGING_APP_URL"; do
+    index=$((index + 1))
+    ready=false
+    for attempt in $(seq 1 12); do
+      status=0
+      # Connect to the public TLS listener from the private network, preserving the URL's SNI.
+      response="$(docker run --rm --network "${project_name}_backend" curlimages/curl:8.13.0 \
+        --connect-timeout 5 --max-time 10 --silent --show-error \
+        --connect-to '::caddy:443' --write-out '|%{http_code}|%header{retry-after}' \
+        "${origin%/}/api/roles" 2>/dev/null)" || status=$?
+      if [ "$status" -eq 0 ]; then
+        if [ "$response" = 'Temporarily unavailable|503|60' ]; then ready=true; fi
+        break
+      fi
+      # Only read-only readiness requests are retried. TLS/network failures never prove closure.
+      [ "$attempt" -eq 12 ] || sleep 2 || break
+    done
+    if [ "$ready" != true ]; then
+      printf 'Public origin %s did not prove closed admission (curl exit %s).\n' "$index" "$status" >&2
+      preserve_unverified_admission || true
+      return 1
+    fi
+  done
+  closed_edge_verified=true
+  echo 'Both public TLS origins returned the admission gate response (503); private smoke remains separate.'
+}
 
 wait_for_gateway() {
   local ready="false"
@@ -376,11 +468,11 @@ wait_for_gateway() {
 }
 
 run_release_smoke() {
-  "$SCRIPT_DIR/verify-production-topology.sh" \
+  "$CONTROLLER_DIR/verify-production-topology.sh" \
     --project-name "$project_name" \
     --egress-url "$TRANXIT_EGRESS_PROBE_URL" || return $?
   export TRANXIT_SMOKE_DOCKER_NETWORK="${TRANXIT_SMOKE_DOCKER_NETWORK:-${project_name}_backend}"
-  TRANXIT_SMOKE_PRIVATE_HTTP=true "$SCRIPT_DIR/smoke.sh" --base-url http://caddy:8082 || return $?
+  TRANXIT_SMOKE_PRIVATE_HTTP=true "$CONTROLLER_DIR/smoke.sh" --base-url http://caddy:8082 || return $?
 }
 
 database_migration_head() {
@@ -433,8 +525,12 @@ create_empty_database_pair() {
 }
 
 checkout_known_green() {
+  validate_admission_artifact "$BACKEND_REPO_DIR" "$green_backend_sha" rollback || return 1
   git -C "$BACKEND_REPO_DIR" checkout --detach "$green_backend_sha" || return 1
+  validate_admission_checkout "$BACKEND_REPO_DIR" "$green_backend_sha" rollback || return 1
   git -C "$FRONTEND_DIR" checkout --detach "$green_frontend_sha" || return 1
+  active_backend_sha="$green_backend_sha"
+  active_frontend_sha="$green_frontend_sha"
   export TRANXIT_IMAGE_TAG="$green_image_tag"
   export TRANXIT_FRONTEND_BUILD_CONTEXT="$FRONTEND_DIR"
 }
@@ -454,6 +550,10 @@ rollback_known_green() {
 
   echo "Rolling back to known-green backend $green_backend_sha and frontend $green_frontend_sha"
 
+  # Validate the actual materialized rollback release before either database can be replaced.
+  checkout_known_green || return 1
+  compose config --quiet || return 1
+
   if [ "$migration_started" = "true" ]; then
     if [ "$MIGRATION_POLICY" = "restore-required" ]; then
       if [ "$admission_may_have_opened" = "true" ] ||
@@ -467,7 +567,7 @@ rollback_known_green() {
         return 1
       fi
       echo "Migration policy is restore-required: restoring the paired pre-migration backup."
-      TRANXIT_DEPLOY_LOCK_HELD=true "$SCRIPT_DIR/restore.sh" \
+      TRANXIT_DEPLOY_LOCK_HELD=true TRANXIT_DEPLOY_PROJECT_DIR="$PROJECT_DIR" "$CONTROLLER_DIR/restore.sh" \
         --env "$TARGET_ENV" \
         --manifest "$backup_manifest" \
         --account-database Tranxit_Account \
@@ -481,13 +581,12 @@ rollback_known_green() {
     echo "Migrations did not begin: no database restore is required."
   fi
 
-  checkout_known_green || return 1
-  compose config --quiet || return 1
   compose build caddy accountservice courierjobservice ocelotapigw frontend || return 1
   compose up -d --no-recreate --wait --wait-timeout 300 "${stateful_services[@]}" || return 1
   start_application_stack || return 1
   wait_for_gateway || return 1
   run_release_smoke || return 1
+  verify_closed_public_edge || return 1
   record_public_admission "$green_backend_sha" "$green_frontend_sha" || return 1
   open_public_admission || return 1
   complete_public_admission || return 1
@@ -532,7 +631,6 @@ on_error() {
   fi
   exit "$exit_code"
 }
-trap 'on_error "$?" "$LINENO"' ERR
 
 echo "Deploy target: $TARGET_ENV"
 echo "Requested backend SHA: $BACKEND_SHA"
@@ -569,8 +667,19 @@ if [ "$rollback_available" = "true" ]; then
   echo "Known-green backend/frontend commits are available locally for rollback."
 fi
 
+# Rejections here must not enter operational recovery or change the running release checkout.
+validate_admission_artifact "$BACKEND_REPO_DIR" "$candidate_backend_sha" candidate || exit 2
+if [ "$rollback_available" = true ]; then
+  validate_admission_artifact "$BACKEND_REPO_DIR" "$green_backend_sha" rollback || exit 2
+fi
+snapshot_controller || exit 2
+trap 'on_error "$?" "$LINENO"' ERR
+
 git -C "$BACKEND_REPO_DIR" checkout --detach "$candidate_backend_sha"
+validate_admission_checkout "$BACKEND_REPO_DIR" "$candidate_backend_sha" candidate || on_error "$?" "$LINENO"
 git -C "$FRONTEND_DIR" checkout --detach "$candidate_frontend_sha"
+active_backend_sha="$candidate_backend_sha"
+active_frontend_sha="$candidate_frontend_sha"
 
 candidate_image_tag="${candidate_backend_sha:0:12}"
 export TRANXIT_DEPLOY_ENV="$TARGET_ENV"
@@ -613,7 +722,7 @@ esac
 
 release_id="${candidate_backend_sha:0:12}-${candidate_frontend_sha:0:12}-$(date -u +"%Y%m%dT%H%M%SZ")"
 echo "Creating verified paired pre-migration backup..."
-backup_output="$(TRANXIT_DEPLOY_LOCK_HELD=true "$SCRIPT_DIR/backup.sh" \
+backup_output="$(TRANXIT_DEPLOY_LOCK_HELD=true TRANXIT_DEPLOY_PROJECT_DIR="$PROJECT_DIR" "$CONTROLLER_DIR/backup.sh" \
   --env "$TARGET_ENV" \
   --release-id "$release_id" \
   --writers-stopped)"
@@ -645,6 +754,7 @@ wait_for_gateway || on_error "$?" "$LINENO"
 
 echo "Running candidate smoke checks..."
 run_release_smoke || on_error "$?" "$LINENO"
+verify_closed_public_edge || on_error "$?" "$LINENO"
 
 if [ "${TRANXIT_DEPLOY_TEST_FORCE_SMOKE_FAILURE:-false}" = "true" ]; then
   echo "Injecting the requested staging smoke failure to exercise automatic rollback." >&2

@@ -55,7 +55,7 @@ if ! [[ "$RELEASE_ID" =~ ^[A-Za-z0-9._-]+$ ]]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_DIR="$(cd "${TRANXIT_DEPLOY_PROJECT_DIR:-$SCRIPT_DIR/..}" && pwd -P)"
 ENV_FILE="${TRANXIT_ENV_FILE:-/opt/tranxit/.env}"
 
 if [ ! -f "$ENV_FILE" ]; then

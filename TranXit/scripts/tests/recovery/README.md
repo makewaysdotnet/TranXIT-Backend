@@ -31,9 +31,13 @@ directory. Failed clone diagnostics are sanitized and retained for CI artifacts.
 - `runtime.mjs` accepts only local Unix sockets or Windows named pipes. It creates
   a random project namespace, labels all resources, and checks both names and
   ownership labels before cleanup. Only Caddy publishes a loopback HTTPS port.
-- A disposable Linux controller runs the real `deploy.sh`, `backup.sh`,
-  `restore.sh`, `smoke.sh` and `verify-production-topology.sh` entry points. It
-  uses private repository clones and local bare Git origins; user checkouts are
+- A disposable Linux controller runs the real `deploy.sh`, `admission-contract.sh`,
+  `backup.sh`, `restore.sh`, `smoke.sh` and `verify-production-topology.sh` from a
+  reviewed copy outside the application checkout, using an explicit project path.
+  Both app fixture commits replace their own six controller scripts; those copies
+  must never execute. The installed entrypoint is retained across attempts and
+  rollbacks, matching the supported workflow's separate controller installation.
+  It uses private repository clones and local bare Git origins; user checkouts are
   mounted read-only. It needs the local Docker socket and must run only trusted
   test code, on a development machine or disposable CI runner.
 - The base, production and staging Compose layers are loaded unchanged. The
@@ -41,6 +45,10 @@ directory. Failed clone diagnostics are sanitized and retained for CI artifacts.
   it disables automatic restarts and forces the frontend's production OTP guard.
   SQL/RabbitMQ, real .NET services, Ocelot, production Next standalone, Caddy and
   Mailpit all run. There are no HTTP, auth, SQL or backup mocks.
+  The staging Caddyfile is copied from the actual selected fixture checkout before
+  edge startup, with its hash/ref recorded. The six protected source artifacts are
+  checked against the trusted contract; this runtime still uses staging Caddy,
+  not the separately planned production-profile browser matrix.
 - `commands.sh` translates the script's literal `tranxit-staging` project to the
   owned namespace, including the inverse translation in network-name inspection.
   Other observed Docker properties are unchanged. The adapter injects selected
@@ -67,6 +75,9 @@ audience, session and ownership validation remain enabled.
 | First deploy fails after starting the stack | No rollback target; running services must be stopped |
 | First deploy and candidate success | Private smoke before admission; correct green marker |
 | Invalid required URL configuration (12 variants) | Exit 2 before any deploy-side Docker call; exact running release and acknowledged writes unchanged |
+| Historical, gate-removed and wrong-mount artifacts (candidate and rollback) | Exact artifact checksum rejection before checkout/Docker; existing green release and writes unchanged |
+| Second attempt after accepted candidate and after rollback | Replaced app scripts stay in place; the installed controller still rejects an unsafe edge artifact |
+| Unverified public TLS response | No automatic restore; fenced with a restart-blocking admission journal |
 | Config/build failure before fencing | Running green release and writes unchanged |
 | Incomplete backup pair | No migration or restore; known-green code recovered |
 | Partial migration | Both actual SQL backups restored; schema markers removed |
@@ -109,16 +120,35 @@ env files, cookies and credentials are not. These 12 cases supplement the origin
 20 cases and leave the restore credibility mutation intact. They exercise the actual
 deployment preflight rather than injecting a command failure.
 
-`T-NFR-9.AcknowledgedWritesPreserved` is the credibility assertion. The controller
+`T-NFR-9.RuntimeAdmissionArtifact` rejects actual historical Caddy content, a
+descendant that removes the gate import, and a wrong admission mount, as either
+candidate or rollback. It requires the exact role, protected path and checksum
+error, not just a generic failure. Artifact checks acquire the deployment lock;
+its metadata may change, but lock contents and all other operational state must
+remain unchanged. Both origins must still acknowledge and persist new writes.
+
+`T-NFR-9.RuntimeControllerPersistence` repeats artifact rejection directly after
+candidate success and after paired rollback, without resetting the prior app
+checkout. The app-bundled scripts remain deliberately replaced, while the six
+installed controller checksums remain unchanged.
+
+`T-NFR-9.VerifiedStopBeforeRestore` records real engine-confirmed stopped states
+for the edge and all four application writers. Starting a service invalidates its
+proof. Before each actual SQL restore, prior proof must match the current scoped
+container IDs and their states. A private mutation omits the recovery fence;
+the test must fail on this ordering assertion even if a later stop succeeds.
+
+`T-NFR-9.AcknowledgedWritesPreserved` is the second credibility assertion. The controller
 temporarily removes the post-admission restore refusal only in its private
-script copy. The test must fail on acknowledged-write loss, not merely a log or
+out-of-checkout script copy. The test must fail on acknowledged-write loss, not merely a log or
 exit-code difference. It then restores the exact original script and reruns the
-matching case. No mutation is committed to either source repository.
+matching case. Both mutations must fail on their intended invariant, followed by
+green runs of the restored source. No mutation is committed to either source repository.
 
 ## Evidence and limits
 
-Sanitized case logs, phase/fault traces, JSON outcomes, source hashes and the
-credibility diff are copied to
+Sanitized case logs, phase/fault traces, JSON outcomes, source hashes, both
+credibility diffs, selected-edge hashes and restore-order events are copied to
 `Tests/TranXit.IntegrationTests/TestResults/tranxit-f01-test-<random>/` before
 owned containers, networks and volumes are removed. Raw credentials, cookies,
 mail, database backups and unredacted logs are never exported. Build images may
@@ -136,8 +166,16 @@ and cutover approval remain separate release gates.
 manual dispatch can select `frontend_ref`. The artifact records both actual
 source SHAs. Both checkouts have full history and no persisted checkout token.
 
-The job first checks wrapper isolation and attached/detached Git preparation,
-then runs the real matrix and its red/green credibility check. Only sanitized
+The job first checks wrapper isolation, deployment/admission shell contracts,
+attached/detached/foreign-owner Git preparation and public-probe engine state,
+then runs the real matrix and both red/green credibility checks. Only sanitized
 evidence is uploaded. The token has read-only repository access. No deployment
 environment or live credentials are configured, and no real server is deployed.
 Branch-protection enforcement of the new check is a separate owner setting.
+
+The real deployment workflow requires an independently reviewed controller at
+`/opt/tranxit/controller/scripts/deploy.sh`, outside `/opt/tranxit/backend/TranXit`.
+It holds the shared controller lock; an operator activates a new version under
+the exclusive lock. The workspace `tasks/deploy-runbook.md` documents installation.
+This test never installs anything on a real host, and the workflow has no fallback
+to an application's historical deployment script.

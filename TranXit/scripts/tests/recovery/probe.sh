@@ -20,6 +20,38 @@ sql() {
 
 fail() { printf 'FAIL: %s\n' "$*" >&2; return 1; }
 
+install_fixture_edge_artifact() {
+  local source=/work/backend/TranXit/ops/Caddyfile.staging
+  [ -f "$source" ] && [ ! -L "$source" ] || return 1
+  cp "$source" /work/settings/Caddyfile || return 1
+  chmod 644 /work/settings/Caddyfile || return 1
+  cmp "$source" /work/settings/Caddyfile >/dev/null || return 1
+  printf '%s\t%s\t%s\n' "${F01_CASE:-baseline}" "$(git -C /work/backend rev-parse HEAD)" \
+    "$(sha256sum /work/settings/Caddyfile | cut -d' ' -f1)" >> /work/public-results/edge-artifacts.tsv
+}
+
+assert_verified_stop_before_restore() {
+  local database="$1" service ids id state proof
+  [ -f /work/state/probes-enabled ] || return 0
+  for service in caddy frontend ocelotapigw accountservice courierjobservice; do
+    proof="/work/state/verified-stops/$service"
+    ids="$(/usr/local/bin/docker-real ps -aq --filter "label=com.docker.compose.project=$F01_PROJECT" \
+      --filter "label=com.docker.compose.service=$service")" || return 1
+    if [ ! -f "$proof" ] || [ "$(cat "$proof")" != "$ids" ]; then
+      printf '%s\t%s\t%s\n' "$F01_CASE" "$database" "$service" >> /work/state/restore-order-violations
+      fail "T-NFR-9.VerifiedStopBeforeRestore: $service lacks engine-confirmed stop before $database"; return 1
+    fi
+    for id in $ids; do
+      state="$(/usr/local/bin/docker-real inspect --format '{{.State.Status}}' "$id")" || return 1
+      case "$state" in created|exited|dead) ;; *)
+        printf '%s\t%s\t%s\n' "$F01_CASE" "$database" "$service" >> /work/state/restore-order-violations
+        fail "T-NFR-9.VerifiedStopBeforeRestore: $service is $state before $database"; return 1 ;;
+      esac
+    done
+  done
+  printf '%s\trestore-before\t%s\tverified\n' "$F01_CASE" "$database" >> /work/public-results/restore-order.tsv
+}
+
 caddy_state() {
   local ids id state result=stopped
   # Inspect engine state rather than a running-only list immediately after Compose stops the edge.
@@ -205,6 +237,11 @@ snapshot_preflight_state() {
   # Include metadata, not just contents: re-truncating an empty deploy lock is a mutation.
   for root in /work/markers /work/backups; do
     find "$root" -print0 | LC_ALL=C sort -z | while IFS= read -r -d '' path; do
+      # Artifact preflight holds the deploy lock; content must stay intact, but lock metadata can change.
+      if [ "${1:-}" = artifact ] && [ "$path" = /work/markers/deploy-staging.lock ]; then
+        sha256sum "$path" || return 1
+        continue
+      fi
       stat -c 'file|%n|%F|%i|%a|%u|%g|%s|%y|%z' "$path" || return 1
       if [ -L "$path" ]; then readlink "$path" || return 1
       elif [ -f "$path" ]; then sha256sum "$path" || return 1; fi

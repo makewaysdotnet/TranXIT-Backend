@@ -180,7 +180,7 @@ verify_checksum "$account_file" "$account_sha256"
 verify_checksum "$courier_file" "$courier_sha256"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_DIR="$(cd "${TRANXIT_DEPLOY_PROJECT_DIR:-$SCRIPT_DIR/..}" && pwd -P)"
 ENV_FILE="${TRANXIT_ENV_FILE:-/opt/tranxit/.env}"
 if [ ! -f "$ENV_FILE" ]; then
   echo "Missing env file: $ENV_FILE" >&2

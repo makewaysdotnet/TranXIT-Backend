@@ -57,6 +57,9 @@ jobs:
       - name: Check test-wrapper isolation
         run: node --test scripts/tests/recovery/runtime.safety.test.mjs
 
+      - name: Check deployment admission and recovery contracts
+        run: bash scripts/tests/deploy-safety-test.sh
+
       - name: Check fixture repository preparation
         run: |
           docker build -t tranxit-recovery-checks scripts/tests/recovery

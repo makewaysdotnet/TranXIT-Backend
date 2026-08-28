@@ -67,9 +67,11 @@ create_backend_release_repo() {
   cp "$DEPLOY_SOURCE" "$repo/TranXit/scripts/deploy.sh"
   cp "$PROJECT_DIR/scripts/backup.sh" "$repo/TranXit/scripts/backup.sh"
   cp "$PROJECT_DIR/scripts/restore.sh" "$repo/TranXit/scripts/restore.sh"
-  printf '# test compose\n' > "$repo/TranXit/docker-compose.yml"
-  printf '# test production override\n' > "$repo/TranXit/docker-compose.prod.yml"
-  printf '# test staging override\n' > "$repo/TranXit/docker-compose.staging.yml"
+  cp "$PROJECT_DIR/scripts/admission-contract.sh" "$repo/TranXit/scripts/admission-contract.sh"
+  mkdir -p "$repo/TranXit/ops/caddy"
+  cp "$PROJECT_DIR/"docker-compose{,.prod,.staging}.yml "$repo/TranXit/"
+  cp "$PROJECT_DIR/ops/"Caddyfile{,.staging} "$repo/TranXit/ops/"
+  cp "$PROJECT_DIR/ops/caddy/Dockerfile" "$repo/TranXit/ops/caddy/Dockerfile"
   cat > "$repo/TranXit/scripts/verify-production-topology.sh" <<'SH'
 #!/usr/bin/env bash
 echo topology >> "$TRANXIT_TEST_DOCKER_LOG"
@@ -98,6 +100,23 @@ SH
   git -C "$repo" push -u origin main >/dev/null 2>&1
 
   BACKEND_REPO="$repo"
+}
+
+create_controller_fixture() {
+  local helper
+  CONTROLLER_SCRIPTS="$TMP_ROOT/operator-controller/scripts"
+  mkdir -p "$CONTROLLER_SCRIPTS"
+  # The app fixture contains the selected reviewed DEPLOY_SOURCE and the model helpers.
+  # Install once outside both repos; later checkouts must never refresh this controller.
+  for helper in deploy admission-contract backup restore smoke verify-production-topology; do
+    cp -- "$BACKEND_REPO/TranXit/scripts/$helper.sh" "$CONTROLLER_SCRIPTS/$helper.sh"
+    chmod 500 "$CONTROLLER_SCRIPTS/$helper.sh"
+  done
+  ln -s "$TMP_ROOT/operator-controller" "$TMP_ROOT/controller-current"
+  CONTROLLER_ENTRYPOINT="$TMP_ROOT/controller-current/scripts/deploy.sh"
+  [ "$(cd "$(dirname "$CONTROLLER_ENTRYPOINT")" && pwd -P)" = "$CONTROLLER_SCRIPTS" ] ||
+    fail 'Installed controller symlink did not resolve to its physical directory'
+  export TRANXIT_DEPLOY_PROJECT_DIR="$BACKEND_REPO/TranXit"
 }
 
 create_frontend_release_repo() {
@@ -143,6 +162,10 @@ set -euo pipefail
 
 args="$*"
 printf 'command %s\n' "$args" >> "$TRANXIT_TEST_DOCKER_LOG"
+if [[ " $args " == *' --connect-to ::caddy:443 '* ]]; then
+  printf '%s' "${TRANXIT_TEST_PUBLIC_EDGE_REPLY:-Temporarily unavailable|503|60}"
+  exit "${TRANXIT_TEST_PUBLIC_EDGE_STATUS:-0}"
+fi
 if [ "$1" = ps ]; then
   for argument in "$@"; do
     case "$argument" in
@@ -332,7 +355,7 @@ ENV
     PATH="$MOCK_BIN:$PATH" TRANXIT_TEST_GIT_LOG="$root/git-events" \
       TRANXIT_TEST_DOCKER_LOG="$DOCKER_LOG" TRANXIT_TEST_STATE_DIR="$root/services" \
       TRANXIT_ENV_FILE="$root/deploy.env" \
-      "$BACKEND_REPO/TranXit/scripts/deploy.sh" --env "$target" --sha "$CANDIDATE_BACKEND_SHA" \
+      "$CONTROLLER_ENTRYPOINT" --env "$target" --sha "$CANDIDATE_BACKEND_SHA" \
         --frontend-ref "$CANDIDATE_FRONTEND_SHA" --migration-policy expand-contract "${flags[@]}"
   ) > "$root/result.out" 2>&1 || status=$?
 
@@ -410,6 +433,230 @@ preflight_credibility() {
   echo 'GREEN T-NFR-9.RequiredEnvPreflightCredibility: original source restored, all preflight cases pass'
 }
 
+artifact_entrypoint_contract() {
+  # UC-NFR-9 - T-NFR-9.AdmissionArtifactEntrypoint (both deploy profiles; no Docker on refusal).
+  local target role root selected green bad status service
+  git -C "$BACKEND_REPO" checkout -q -b unsupported-admission "$CANDIDATE_BACKEND_SHA"
+  sed -i 's/import public_tranxit_site/import tranxit_site/' "$BACKEND_REPO/TranXit/ops/Caddyfile"{,.staging}
+  git -C "$BACKEND_REPO" add TranXit/ops/Caddyfile TranXit/ops/Caddyfile.staging
+  git -C "$BACKEND_REPO" commit -qm 'fixture: ungated descendant preserving gate snippet'
+  bad="$(git -C "$BACKEND_REPO" rev-parse HEAD)"
+  git -C "$BACKEND_REPO" push origin unsupported-admission >/dev/null 2>&1
+  for target in staging production; do
+    for role in candidate rollback; do
+      root="$TMP_ROOT/artifact-$target-$role"
+      mkdir -p "$root/markers/admission-$target" "$root/services"
+      selected="$CANDIDATE_BACKEND_SHA"; green="$GREEN_BACKEND_SHA"
+      if [ "$role" = candidate ]; then selected="$bad"; else green="$bad"; fi
+      printf 'environment=%s\nbackend_sha=%s\nfrontend_sha=%s\nadmission_policy=private-smoke-v1\n' \
+        "$target" "$green" "$GREEN_FRONTEND_SHA" > "$root/markers/last-$target-green"
+      printf 'admitted\n' > "$root/markers/admission-$target/open"
+      : > "$root/markers/deploy-$target.lock"
+      chmod 600 "$root/markers/deploy-$target.lock"
+      cp -a "$root/markers" "$root/markers.before"
+      for service in caddy frontend ocelotapigw accountservice courierjobservice; do echo running > "$root/services/$service"; done
+      cp -a "$root/services" "$root/services.before"
+      cat > "$root/deploy.env" <<ENV
+TRANXIT_FRONTEND_DIR=$FRONTEND_REPO
+TRANXIT_MARKER_DIR=$root/markers
+TRANXIT_ADMISSION_DIR=$root/markers/admission-$target
+TRANXIT_BACKUP_DIR=$root/backups
+PUBLIC_APP_URL=https://production.example.invalid
+STAGING_APP_URL=https://staging.example.invalid
+TRANXIT_EGRESS_PROBE_URL=https://probe.example.invalid
+ENV
+      git -C "$BACKEND_REPO" checkout -q --detach "$GREEN_BACKEND_SHA"
+      git -C "$FRONTEND_REPO" checkout -q --detach "$GREEN_FRONTEND_SHA"
+      : > "$DOCKER_LOG"; : > "$root/git-events"
+      status=0
+      (
+        unset MAILPIT_DOMAIN MAILPIT_BASIC_AUTH_USER MAILPIT_BASIC_AUTH_HASH TRANXIT_E2E_MAIL_INBOX
+        unset TRANXIT_DEPLOY_TEST_FORCE_SMOKE_FAILURE TRANXIT_DEPLOY_TEST_FORCE_POST_ADMISSION_FAILURE
+        PATH="$MOCK_BIN:$PATH" TRANXIT_TEST_GIT_LOG="$root/git-events" \
+          TRANXIT_TEST_DOCKER_LOG="$DOCKER_LOG" TRANXIT_TEST_STATE_DIR="$root/services" \
+          TRANXIT_ENV_FILE="$root/deploy.env" "$CONTROLLER_ENTRYPOINT" \
+          --env "$target" --sha "$selected" --frontend-ref "$CANDIDATE_FRONTEND_SHA" --migration-policy restore-required
+      ) > "$root/result.out" 2>&1 || status=$?
+      assert_status 2 "$status" "$target $role artifact refusal"
+      assert_contains "$root/result.out" "$role admission contract rejected:"
+      [ ! -s "$DOCKER_LOG" ] || fail 'Artifact refusal reached Docker'
+      if grep -F ' checkout ' "$root/git-events" >/dev/null; then fail 'Artifact refusal checked out an unsupported release'; fi
+      [ "$(git -C "$BACKEND_REPO" rev-parse HEAD)" = "$GREEN_BACKEND_SHA" ] || fail 'Artifact refusal changed backend HEAD'
+      [ "$(git -C "$FRONTEND_REPO" rev-parse HEAD)" = "$GREEN_FRONTEND_SHA" ] || fail 'Artifact refusal changed frontend HEAD'
+      diff -r "$root/markers.before" "$root/markers" >/dev/null || fail 'Artifact refusal changed marker or admission contents'
+      diff -r "$root/services.before" "$root/services" >/dev/null || fail 'Artifact refusal changed running services'
+      [ ! -e "$root/backups" ] || fail 'Artifact refusal reached backup'
+    done
+  done
+  echo 'PASS T-NFR-9.AdmissionArtifactEntrypoint (4 profile/target cases; no Docker or checkout)'
+}
+
+controller_next_invocation_case() {
+  # UC-NFR-9 - T-NFR-9.InstalledControllerNextInvocation.
+  local target="$1" role="$2" root="$TMP_ROOT/controller-next-$1-$2"
+  local repo="$root/backend" frontend="$root/frontend" helper service status
+  local replaced_green replaced_candidate bad green expected_backend expected_frontend
+  local edge_path failed_start=false first_status=0
+  mkdir -p "$root/markers/admission-$target" "$root/services"
+  git clone -q --bare --no-hardlinks "$TMP_ROOT/backend-origin.git" "$root/backend-origin.git"
+  git -c core.autocrlf=false clone -q "$root/backend-origin.git" "$repo"
+  git -c core.autocrlf=false clone -q "$TMP_ROOT/frontend-origin.git" "$frontend"
+  git -C "$repo" config user.name 'Deploy Safety Test'
+  git -C "$repo" config user.email 'deploy-safety@example.invalid'
+  git -C "$repo" config core.autocrlf false
+  git -C "$frontend" config core.autocrlf false
+
+  git -C "$repo" checkout -q -b replaced-controller "$GREEN_BACKEND_SHA"
+  for helper in deploy admission-contract backup restore smoke verify-production-topology; do
+    printf '#!/usr/bin/env bash\nprintf "untrusted-app-controller %s\\n" >> "$TRANXIT_TEST_DOCKER_LOG"\nexit 77\n' \
+      "$helper" > "$repo/TranXit/scripts/$helper.sh"
+  done
+  # A downgraded app entrypoint could silently accept an unchecked next release.
+  sed -i 's/^exit 77$/exit 0/' "$repo/TranXit/scripts/deploy.sh"
+  git -C "$repo" add TranXit/scripts
+  git -C "$repo" commit -qm 'fixture: compatible rollback replaces all app controller scripts'
+  replaced_green="$(git -C "$repo" rev-parse HEAD)"
+  printf 'compatible candidate with replaced controller scripts\n' > "$repo/release.txt"
+  git -C "$repo" add release.txt
+  git -C "$repo" commit -qm 'fixture: compatible candidate retains app controller replacements'
+  replaced_candidate="$(git -C "$repo" rev-parse HEAD)"
+  edge_path=TranXit/ops/Caddyfile
+  if [ "$target" = staging ]; then edge_path=TranXit/ops/Caddyfile.staging; fi
+  sed -i 's/import public_tranxit_site/import tranxit_site/g' "$repo/$edge_path"
+  git -C "$repo" add "$edge_path"
+  git -C "$repo" commit -qm 'fixture: next release bypasses public admission'
+  bad="$(git -C "$repo" rev-parse HEAD)"
+  git -C "$repo" push -q origin replaced-controller
+  git -C "$repo" checkout -q --detach "$GREEN_BACKEND_SHA"
+  git -C "$frontend" checkout -q --detach "$GREEN_FRONTEND_SHA"
+
+  green="$GREEN_BACKEND_SHA"
+  expected_backend="$replaced_candidate"
+  expected_frontend="$CANDIDATE_FRONTEND_SHA"
+  if [ "$role" = rollback ]; then
+    green="$replaced_green"
+    expected_backend="$replaced_green"
+    expected_frontend="$GREEN_FRONTEND_SHA"
+    failed_start=true
+    first_status=47
+  fi
+  printf 'environment=%s\nbackend_sha=%s\nfrontend_sha=%s\nadmission_policy=private-smoke-v1\n' \
+    "$target" "$green" "$GREEN_FRONTEND_SHA" > "$root/markers/last-$target-green"
+  cp "$root/markers/last-$target-green" "$root/initial-marker"
+  printf 'admitted\n' > "$root/markers/admission-$target/open"
+  for service in caddy frontend ocelotapigw accountservice courierjobservice; do
+    printf 'running\n' > "$root/services/$service"
+  done
+  cat > "$root/deploy.env" <<ENV
+TRANXIT_FRONTEND_DIR=$frontend
+TRANXIT_MARKER_DIR=$root/markers
+TRANXIT_ADMISSION_DIR=$root/markers/admission-$target
+TRANXIT_BACKUP_DIR=$root/backups
+TRANXIT_BACKUP_RETENTION_DAYS=14
+PUBLIC_APP_URL=https://production.example.invalid
+STAGING_APP_URL=https://staging.example.invalid
+TRANXIT_EGRESS_PROBE_URL=https://probe.example.invalid
+TRANXIT_DEPLOY_TEST_FORCE_SMOKE_FAILURE=false
+TRANXIT_DEPLOY_TEST_FORCE_POST_ADMISSION_FAILURE=false
+ENV
+  sha256sum "$CONTROLLER_SCRIPTS/"*.sh > "$root/controller.before"
+  (
+    unset MAILPIT_DOMAIN MAILPIT_BASIC_AUTH_USER MAILPIT_BASIC_AUTH_HASH TRANXIT_E2E_MAIL_INBOX
+    unset TRANXIT_TEST_FAIL_BACKUP TRANXIT_TEST_FAIL_ROLLBACK_BUILD TRANXIT_TEST_FAIL_SECOND_RESTORE
+    unset TRANXIT_TEST_FAIL_STORAGE_PREP TRANXIT_TEST_PUBLIC_EDGE_REPLY TRANXIT_TEST_PUBLIC_EDGE_STATUS
+    export PATH="$MOCK_BIN:$PATH"
+    export TRANXIT_DEPLOY_PROJECT_DIR="$repo/TranXit" TRANXIT_ENV_FILE="$root/deploy.env"
+    export TRANXIT_TEST_DOCKER_LOG="$root/docker-events" TRANXIT_TEST_GIT_LOG="$root/git-events"
+    export TRANXIT_TEST_STATE_DIR="$root/services"
+    : > "$root/docker-events"
+    : > "$root/git-events"
+    status=0
+    TRANXIT_TEST_FAIL_CANDIDATE_START="$failed_start" "$CONTROLLER_ENTRYPOINT" \
+      --env "$target" --sha "$replaced_candidate" --frontend-ref "$CANDIDATE_FRONTEND_SHA" \
+      --migration-policy restore-required > "$root/attempt-1.out" 2>&1 || status=$?
+    assert_status "$first_status" "$status" "$target $role first controller invocation"
+    if [ "$role" = rollback ]; then
+      assert_contains "$root/attempt-1.out" 'Known-green release restored successfully'
+      assert_contains "$root/docker-events" startup-failure
+      assert_contains "$root/docker-events" restore-sql
+      cmp "$root/initial-marker" "$root/markers/last-$target-green" >/dev/null ||
+        fail 'Controller rollback changed the known-green marker'
+    else
+      assert_contains "$root/attempt-1.out" 'Deploy completed.'
+      if grep -F restore-sql "$root/docker-events" >/dev/null; then fail 'Accepted controller fixture unexpectedly restored data'; fi
+    fi
+    assert_contains "$root/docker-events" backup
+    assert_contains "$root/docker-events" topology
+    assert_contains "$root/docker-events" http-smoke
+    if grep -F untrusted-app-controller "$root/docker-events" >/dev/null; then fail 'First invocation executed an app controller replacement'; fi
+    [ "$(git -C "$repo" rev-parse HEAD)" = "$expected_backend" ] || fail 'First invocation retained the wrong backend checkout'
+    [ "$(git -C "$frontend" rev-parse HEAD)" = "$expected_frontend" ] || fail 'First invocation retained the wrong frontend checkout'
+    assert_contains "$root/markers/last-$target-green" "backend_sha=$expected_backend"
+    [ -f "$root/markers/admission-$target/open" ] || fail 'First invocation did not admit the verified release'
+    [ ! -e "$root/markers/deploy-$target-admitted" ] || fail 'First invocation left unresolved admission'
+    for helper in deploy admission-contract backup restore smoke verify-production-topology; do
+      assert_contains "$repo/TranXit/scripts/$helper.sh" "untrusted-app-controller $helper"
+    done
+    for service in caddy frontend ocelotapigw accountservice courierjobservice; do
+      [ "$(cat "$root/services/$service")" = running ] || fail 'First invocation left a model service stopped'
+    done
+
+    # Preserve the exact accepted/recovered app checkout. Only observation logs are
+    # cleared between attempts; no trusted app script is copied or checked out again.
+    cp -a "$repo/TranXit" "$root/checkout.before"
+    cp "$repo/release.txt" "$root/release.before"
+    cp "$frontend/release.txt" "$root/frontend.before"
+    git -C "$repo" status --porcelain=v1 --untracked-files=all > "$root/git-status.before"
+    cp -a "$root/markers" "$root/markers.before"
+    cp -a "$root/services" "$root/services.before"
+    cp -a "$root/backups" "$root/backups.before"
+    # Lock acquisition can update lock metadata, but not release/admission state.
+    find "$root/markers" ! -path "$root/markers/deploy-$target.lock" \
+      -exec stat -c '%n|%F|%a|%i|%s|%y|%z' {} + | sort > "$root/state-metadata.before"
+    : > "$root/docker-events"
+    : > "$root/git-events"
+    status=0
+    TRANXIT_TEST_FAIL_CANDIDATE_START=false "$CONTROLLER_ENTRYPOINT" \
+      --env "$target" --sha "$bad" --frontend-ref "$CANDIDATE_FRONTEND_SHA" \
+      --migration-policy restore-required > "$root/attempt-2.out" 2>&1 || status=$?
+    assert_status 2 "$status" "$target $role second controller invocation"
+    assert_contains "$root/attempt-2.out" "candidate admission contract rejected: $edge_path (checksum mismatch)"
+    [ ! -s "$root/docker-events" ] || fail 'Second invocation reached Docker or an app controller replacement'
+    if grep -E ' (checkout|switch|reset|clean) ' "$root/git-events" >/dev/null; then fail 'Second invocation changed a deployment checkout'; fi
+    [ "$(git -C "$repo" rev-parse HEAD)" = "$expected_backend" ] || fail 'Second invocation changed backend HEAD'
+    [ "$(git -C "$frontend" rev-parse HEAD)" = "$expected_frontend" ] || fail 'Second invocation changed frontend HEAD'
+    diff -r "$root/checkout.before" "$repo/TranXit" >/dev/null || fail 'Second invocation changed app checkout bytes'
+    cmp "$root/release.before" "$repo/release.txt" >/dev/null || fail 'Second invocation changed the backend release file'
+    cmp "$root/frontend.before" "$frontend/release.txt" >/dev/null || fail 'Second invocation changed frontend bytes'
+    git -C "$repo" status --porcelain=v1 --untracked-files=all > "$root/git-status.after"
+    cmp "$root/git-status.before" "$root/git-status.after" >/dev/null || fail 'Second invocation changed checkout status'
+    diff -r "$root/markers.before" "$root/markers" >/dev/null || fail 'Second invocation changed marker/admission contents'
+    diff -r "$root/services.before" "$root/services" >/dev/null || fail 'Second invocation changed running services'
+    diff -r "$root/backups.before" "$root/backups" >/dev/null || fail 'Second invocation changed paired backups'
+    find "$root/markers" ! -path "$root/markers/deploy-$target.lock" \
+      -exec stat -c '%n|%F|%a|%i|%s|%y|%z' {} + | sort > "$root/state-metadata.after"
+    cmp "$root/state-metadata.before" "$root/state-metadata.after" >/dev/null || fail 'Second invocation changed release/admission metadata'
+    sha256sum "$CONTROLLER_SCRIPTS/"*.sh > "$root/controller.after"
+    cmp "$root/controller.before" "$root/controller.after" >/dev/null || fail 'App checkout changed the installed controller'
+  ) || {
+    PREFLIGHT_OUTPUT="$root/attempt-2.out"
+    [ -f "$PREFLIGHT_OUTPUT" ] || PREFLIGHT_OUTPUT="$root/attempt-1.out"
+    cat "$root/attempt-1.out" >&2
+    fail "$target $role next-invocation controller regression"
+  }
+  echo "PASS T-NFR-9.InstalledControllerNextInvocation ($target/$role; compatible scripts retained, next artifact rejected)"
+}
+
+controller_next_invocation_contract() {
+  local target role
+  for target in staging production; do
+    for role in candidate rollback; do
+      controller_next_invocation_case "$target" "$role"
+    done
+  done
+  echo 'PASS T-NFR-9.InstalledControllerNextInvocationMatrix (4 cases / 8 deploy attempts)'
+}
+
 write_env_file() {
   local backup_dir="$1"
   ENV_FILE="$TMP_ROOT/deploy.env"
@@ -438,7 +685,7 @@ run_failed_deploy() {
     TRANXIT_TEST_FAIL_SECOND_RESTORE="${TRANXIT_TEST_FAIL_SECOND_RESTORE:-false}" \
     TRANXIT_TEST_FAIL_CANDIDATE_START="${TRANXIT_TEST_FAIL_CANDIDATE_START:-false}" \
     TRANXIT_ENV_FILE="$ENV_FILE" \
-    "$BACKEND_REPO/TranXit/scripts/deploy.sh" \
+    "$CONTROLLER_ENTRYPOINT" \
       --env staging \
       --sha "$CANDIDATE_BACKEND_SHA" \
       --frontend-ref "$CANDIDATE_FRONTEND_SHA" \
@@ -477,9 +724,12 @@ if [ "$MODE" = --preflight-credibility ]; then preflight_credibility; exit; fi
 
 create_backend_release_repo
 create_frontend_release_repo
+create_controller_fixture
 create_mock_commands
 preflight_contract
 if [ "$MODE" = --preflight ]; then exit; fi
+artifact_entrypoint_contract
+controller_next_invocation_contract
 
 MARKER_DIR="$TMP_ROOT/markers"
 MARKER_FILE="$MARKER_DIR/last-staging-green"
@@ -508,7 +758,7 @@ set +e
 PATH="$MOCK_BIN:$PATH" \
   TRANXIT_TEST_DOCKER_LOG="$DOCKER_LOG" \
   TRANXIT_ENV_FILE="$ENV_FILE" \
-  "$BACKEND_REPO/TranXit/scripts/deploy.sh" \
+  "$CONTROLLER_ENTRYPOINT" \
     --env production \
     --sha "$CANDIDATE_BACKEND_SHA" \
     --frontend-ref "$CANDIDATE_FRONTEND_SHA" \
@@ -524,7 +774,7 @@ TRANXIT_TEST_FORCE_SMOKE_FAILURE=false TRANXIT_TEST_POST_ADMISSION_FAILURE=true 
   write_env_file "$TMP_ROOT/backups-production-guard"
 set +e
 PATH="$MOCK_BIN:$PATH" TRANXIT_TEST_DOCKER_LOG="$DOCKER_LOG" TRANXIT_ENV_FILE="$ENV_FILE" \
-  "$BACKEND_REPO/TranXit/scripts/deploy.sh" --env production --sha "$CANDIDATE_BACKEND_SHA" \
+  "$CONTROLLER_ENTRYPOINT" --env production --sha "$CANDIDATE_BACKEND_SHA" \
     --frontend-ref "$CANDIDATE_FRONTEND_SHA" --migration-policy expand-contract \
     >"$TMP_ROOT/production-post-admission-injection.out" 2>&1
 PRODUCTION_INJECTION_STATUS=$?
@@ -551,7 +801,7 @@ PATH="$MOCK_BIN:$PATH" \
   TRANXIT_TEST_DOCKER_LOG="$DOCKER_LOG" \
   TRANXIT_TEST_DATABASE_PRESENCE='0|0' \
   TRANXIT_ENV_FILE="$FIRST_ENV_FILE" \
-  "$BACKEND_REPO/TranXit/scripts/deploy.sh" \
+  "$CONTROLLER_ENTRYPOINT" \
     --env staging \
     --sha "$CANDIDATE_BACKEND_SHA" \
     --frontend-ref "$CANDIDATE_FRONTEND_SHA" \
@@ -571,7 +821,7 @@ set +e
 PATH="$MOCK_BIN:$PATH" \
   TRANXIT_TEST_DOCKER_LOG="$DOCKER_LOG" \
   TRANXIT_ENV_FILE="$ENV_FILE" \
-  "$BACKEND_REPO/TranXit/scripts/deploy.sh" \
+  "$CONTROLLER_ENTRYPOINT" \
     --env staging \
     --sha "$CANDIDATE_BACKEND_SHA" \
     --frontend-ref "$CANDIDATE_FRONTEND_SHA" \
@@ -613,6 +863,54 @@ assert_rollback_result "$RESTORE_OUTPUT"
 assert_backup_precedes_migration
 assert_contains "$DOCKER_LOG" "REPLACE"
 assert_contains "$RESTORE_OUTPUT" "restoring the paired pre-migration backup"
+
+# UC-NFR-9 - T-NFR-9.TrustedControllerSnapshot (candidate helper replacements never execute).
+ORIGINAL_CANDIDATE="$CANDIDATE_BACKEND_SHA"
+git -C "$BACKEND_REPO" checkout -q -b candidate-helper-drift "$ORIGINAL_CANDIDATE"
+for helper in backup restore smoke verify-production-topology; do
+  printf '#!/usr/bin/env bash\necho untrusted-candidate-helper >> "$TRANXIT_TEST_DOCKER_LOG"\nexit 77\n' > "$BACKEND_REPO/TranXit/scripts/$helper.sh"
+done
+git -C "$BACKEND_REPO" add TranXit/scripts
+git -C "$BACKEND_REPO" commit -qm 'fixture: candidate helper replacements'
+CANDIDATE_BACKEND_SHA="$(git -C "$BACKEND_REPO" rev-parse HEAD)"
+git -C "$BACKEND_REPO" push origin candidate-helper-drift >/dev/null 2>&1
+git -C "$BACKEND_REPO" checkout -q --detach "$GREEN_BACKEND_SHA"
+: > "$DOCKER_LOG"
+write_env_file "$TMP_ROOT/backups-trusted-controller"
+run_failed_deploy restore-required "$TMP_ROOT/trusted-controller.out"
+assert_rollback_result "$TMP_ROOT/trusted-controller.out"
+assert_contains "$DOCKER_LOG" backup
+assert_contains "$DOCKER_LOG" restore-sql
+assert_contains "$DOCKER_LOG" http-smoke
+if grep -F untrusted-candidate-helper "$DOCKER_LOG" >/dev/null; then fail 'Candidate substituted the trusted controller'; fi
+CANDIDATE_BACKEND_SHA="$ORIGINAL_CANDIDATE"
+echo 'PASS T-NFR-9.TrustedControllerSnapshot (backup, restore, topology and smoke frozen before checkout)'
+
+# UC-NFR-9 - T-NFR-9.UnverifiedPublicEdgeRefusesRestore (actual deploy recovery dispatcher).
+for edge_failure in open tls; do
+  : > "$DOCKER_LOG"
+  write_env_file "$TMP_ROOT/backups-unverified-$edge_failure"
+  if [ "$edge_failure" = open ]; then
+    TRANXIT_TEST_PUBLIC_EDGE_REPLY='roles|200|' run_failed_deploy restore-required "$TMP_ROOT/unverified-$edge_failure.out"
+  else
+    TRANXIT_TEST_PUBLIC_EDGE_REPLY='|000|' TRANXIT_TEST_PUBLIC_EDGE_STATUS=60 \
+      run_failed_deploy restore-required "$TMP_ROOT/unverified-$edge_failure.out"
+  fi
+  assert_status 1 "$DEPLOY_STATUS" "unverified public edge $edge_failure"
+  assert_contains "$TMP_ROOT/unverified-$edge_failure.out" 'Public origin 1 did not prove closed admission'
+  assert_contains "$TMP_ROOT/unverified-$edge_failure.out" 'AUTOMATIC RESTORE REFUSED'
+  assert_contains "$TMP_ROOT/unverified-$edge_failure.out" 'RECOVERY FENCED'
+  cmp "$MARKER_SNAPSHOT" "$MARKER_FILE" >/dev/null || fail 'Unverified edge advanced the green marker'
+  [ -f "$MARKER_DIR/deploy-staging-admitted" ] || fail 'Unverified edge omitted persistent uncertainty'
+  [ ! -e "$MARKER_DIR/admission-staging/open" ] || fail 'Unverified edge opened the gate'
+  if grep -F 'restore-sql ' "$DOCKER_LOG" >/dev/null; then fail 'Unverified edge restored a database'; fi
+  for service in caddy frontend ocelotapigw accountservice courierjobservice; do
+    [ "$(cat "$TRANXIT_TEST_STATE_DIR/$service")" = exited ] || fail 'Unverified edge left an app running'
+  done
+  # Reset only this command-model fixture; production retains the blocking journal for an operator.
+  rm -- "$MARKER_DIR/deploy-staging-admitted"
+done
+echo 'PASS T-NFR-9.UnverifiedPublicEdgeRefusesRestore (open response and TLS error fence without restore)'
 
 : > "$DOCKER_LOG"
 write_env_file "$TMP_ROOT/backups-failed"
@@ -835,3 +1133,5 @@ echo "PASS T-NFR-9.PairedRestoreContract"
 
 bash "$SCRIPT_DIR/deploy-fence-test.sh" --contract
 bash "$SCRIPT_DIR/deploy-fence-test.sh" --admission
+bash "$SCRIPT_DIR/admission-contract-test.sh"
+bash "$SCRIPT_DIR/deploy-public-edge-test.sh"

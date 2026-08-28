@@ -166,9 +166,13 @@ jobs:
           DEPLOY_USER: ${{ steps.host.outputs.user }}
         run: |
           set -euo pipefail
+          # A separately reviewed controller survives application checkout/rollback. The shared
+          # lock also prevents an operator from switching its version during script startup.
           printf -v deploy_command \
-            'cd %q && ./scripts/deploy.sh --env %q --sha %q --frontend-ref %q --migration-policy %q' \
+            'flock --shared %q env TRANXIT_DEPLOY_PROJECT_DIR=%q bash %q --env %q --sha %q --frontend-ref %q --migration-policy %q' \
+            /opt/tranxit/controller.lock \
             /opt/tranxit/backend/TranXit \
+            /opt/tranxit/controller/scripts/deploy.sh \
             "$TARGET_ENV" \
             "$BACKEND_SHA" \
             "$FRONTEND_REF" \
