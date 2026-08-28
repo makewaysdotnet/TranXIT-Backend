@@ -79,11 +79,12 @@ request() {
   local method="$1" route="$2" body="${3:-}" jar="${4:-}" host="${5:-$DOMAIN}"
   local state_dir="${F01_PROBE_STATE_DIR:-/work/state}"
   local certificate="$state_dir/ca.crt"
-  local timeout=0.5 before after curl_status=0
+  local timeout=0.5 connect_timeout=1 before after curl_status=0
   before="$(caddy_state)" || { fail 'Cannot verify Caddy state before the public probe'; return 1; }
-  if [ "$before" = running ]; then timeout=8; fi
+  # Docker DNS can exceed one second on a busy runner; never retry an application write.
+  if [ "$before" = running ]; then timeout=15; connect_timeout=5; fi
   [ -f "$certificate" ] || certificate=/etc/ssl/certs/ca-certificates.crt
-  local args=(-sS --connect-timeout 1 --max-time "$timeout" --cacert "$certificate"
+  local args=(-sS --connect-timeout "$connect_timeout" --max-time "$timeout" --cacert "$certificate"
     --connect-to "$host:443:caddy:443" -H "Origin: https://$host"
     -H 'Content-Type: application/json' -X "$method" -o "$state_dir/response.json" -w '%{http_code}')
   [ -z "$body" ] || args+=(--data "$body")

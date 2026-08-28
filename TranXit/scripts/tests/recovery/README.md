@@ -98,6 +98,10 @@ verified customer uses the real BFF to create shipments; separate registration
 requests also write to Account SQL. Every successful response's exact email/id
 pair must remain in SQL. Rejected requests must be absent. A network/TLS failure
 while Caddy is running is a test failure, not evidence of a closed gate.
+Running-edge probes allow five seconds for DNS/connect and fifteen seconds overall;
+they send each request once, including writes. Stopped-edge probes keep their short
+half-second total bound. The engine-state contract checks these limits, refuses
+retry/insecure flags and confirms running-edge timeouts still fail.
 
 `T-NFR-9.RuntimeInvalidConfiguration` runs immediately after the first green
 release, before the baseline backup. For each of `TRANXIT_EGRESS_PROBE_URL`,
