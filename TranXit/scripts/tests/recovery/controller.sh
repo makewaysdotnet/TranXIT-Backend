@@ -211,6 +211,7 @@ finish() {
   trap - EXIT
   /bin/rm -f /work/state/probes-enabled
   if [ -f /work/state/driver.log ]; then sanitize < /work/state/driver.log > /work/public-results/driver.log; fi
+  if [ -f /work/state/credibility.out ]; then sanitize < /work/state/credibility.out > /work/public-results/credibility-red.log; fi
   if [ "$status" -ne 0 ]; then printf 'FAIL: recovery controller stopped (exit %s); sanitized logs are retained for export.\n' "$status"; fi
   exit "$status"
 }
@@ -432,8 +433,10 @@ export TRANXIT_DEPLOY_TEST_FORCE_POST_ADMISSION_FAILURE=true
 if run_case CredibilityRed restore-required '' 1 fenced '1|1' '0|0' 'AUTOMATIC RESTORE REFUSED' true > /work/state/credibility.out 2>&1; then
   fail 'Credibility check failed: unsafe restore mutation passed'; exit 1
 fi
-grep -F 'T-NFR-9.AcknowledgedWritesPreserved' /work/state/credibility.out >/dev/null
 sanitize < /work/state/credibility.out > /work/public-results/credibility-red.log
+grep -F 'T-NFR-9.AcknowledgedWritesPreserved' /work/state/credibility.out >/dev/null || {
+  fail 'Credibility failed for an unexpected reason; see credibility-red.log (not valid red evidence).'; exit 1;
+}
 echo 'PASS: CredibilityRed caught acknowledged-write loss.'
 cp /work/state/original-deploy.sh /work/backend/TranXit/scripts/deploy.sh
 cmp /source/backend/TranXit/scripts/deploy.sh /work/backend/TranXit/scripts/deploy.sh >/dev/null

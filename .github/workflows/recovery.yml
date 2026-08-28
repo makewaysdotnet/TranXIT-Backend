@@ -63,6 +63,7 @@ jobs:
           docker run --rm --network none --entrypoint bash tranxit-recovery-checks /harness/checkout-safety-test.sh attached
           docker run --rm --network none --entrypoint bash tranxit-recovery-checks /harness/checkout-safety-test.sh detached
           docker run --rm --network none --entrypoint bash tranxit-recovery-checks /harness/checkout-safety-test.sh foreign-owner
+          docker run --rm --network none --entrypoint bash --env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin tranxit-recovery-checks /harness/probe-safety-test.sh
 
       # Only private fixture clones and generated test credentials are used.
       - name: Run real recovery matrix and credibility check

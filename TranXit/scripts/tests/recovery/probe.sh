@@ -20,26 +20,50 @@ sql() {
 
 fail() { printf 'FAIL: %s\n' "$*" >&2; return 1; }
 
-caddy_running() {
-  [ -n "$(/usr/local/bin/docker-real ps -q \
+caddy_state() {
+  local ids id state result=stopped
+  # Inspect engine state rather than a running-only list immediately after Compose stops the edge.
+  ids="$(/usr/local/bin/docker-real ps -aq \
     --filter "label=com.docker.compose.project=$F01_PROJECT" \
-    --filter label=com.docker.compose.service=caddy --filter status=running)" ]
+    --filter label=com.docker.compose.service=caddy)" || return 1
+  for id in $ids; do
+    state="$(/usr/local/bin/docker-real inspect --format '{{.State.Status}}' "$id")" || return 1
+    case "$state" in
+      created|exited|dead) ;;
+      running|restarting|paused) result=running ;;
+      *) return 1 ;;
+    esac
+  done
+  printf '%s\n' "$result"
+}
+
+caddy_running() {
+  local state
+  state="$(caddy_state)" || return 2
+  [ "$state" = running ]
 }
 
 request() {
   local method="$1" route="$2" body="${3:-}" jar="${4:-}" host="${5:-$DOMAIN}"
-  local certificate=/work/state/ca.crt
-  local timeout=0.5
-  if caddy_running; then timeout=8; fi
+  local state_dir="${F01_PROBE_STATE_DIR:-/work/state}"
+  local certificate="$state_dir/ca.crt"
+  local timeout=0.5 before after curl_status=0
+  before="$(caddy_state)" || { fail 'Cannot verify Caddy state before the public probe'; return 1; }
+  if [ "$before" = running ]; then timeout=8; fi
   [ -f "$certificate" ] || certificate=/etc/ssl/certs/ca-certificates.crt
   local args=(-sS --connect-timeout 1 --max-time "$timeout" --cacert "$certificate"
     --connect-to "$host:443:caddy:443" -H "Origin: https://$host"
-    -H 'Content-Type: application/json' -X "$method" -o /work/state/response.json -w '%{http_code}')
+    -H 'Content-Type: application/json' -X "$method" -o "$state_dir/response.json" -w '%{http_code}')
   [ -z "$body" ] || args+=(--data "$body")
   [ -z "$jar" ] || args+=(-b "$jar" -c "$jar")
-  HTTP_CODE="$(curl "${args[@]}" "https://$host$route" 2>/work/state/curl-error.log)" || true
+  HTTP_CODE="$(curl "${args[@]}" "https://$host$route" 2>"$state_dir/curl-error.log")" || curl_status=$?
   HTTP_CODE="${HTTP_CODE:-000}"
-  if [ "$HTTP_CODE" = 000 ] && caddy_running; then
+  if [ "$HTTP_CODE" = 000 ] || [ "$curl_status" -ne 0 ]; then
+    after="$(caddy_state)" || after=unverified
+    if [ "$HTTP_CODE" = 000 ] && [ "$after" = stopped ] && [[ "$curl_status" =~ ^(6|7|28)$ ]]; then return 0; fi
+    printf 'Public probe failed: case=%s point=%s method=%s status=%s curl=%s edge-before=%s edge-after=%s\n' \
+      "${F01_CASE:-standalone}" "${F01_PROBE_POINT:-standalone}" "$method" "$HTTP_CODE" "$curl_status" "$before" "$after" >&2
+    sanitize < "$state_dir/curl-error.log" >&2
     fail "Live Caddy was unreachable or TLS failed; this is not proof of closed admission."
     return 1
   fi
@@ -84,6 +108,7 @@ prepare_actor() {
 
 probe() {
   local point="$1" expected="$2" number host other nonce email id body accepted=false
+  F01_PROBE_POINT="$point"
   [ -f /work/state/probes-enabled ] || return 0
   number="$(cat /work/state/sequence)"; number=$((number + 1)); printf '%s' "$number" > /work/state/sequence
   host="$DOMAIN"; other="$STAGING_DOMAIN"
