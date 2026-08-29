@@ -182,4 +182,7 @@ The real deployment workflow requires an independently reviewed controller at
 It holds the shared controller lock; an operator activates a new version under
 the exclusive lock. The workspace `tasks/deploy-runbook.md` documents installation.
 This test never installs anything on a real host, and the workflow has no fallback
-to an application's historical deployment script.
+to an application's historical deployment script. The fixture pre-pulls the controller's
+digest-pinned HTTP probe image during setup; its Docker adapter accepts only
+`run --pull=never` with that digest during deploy and rollback, so a runtime registry
+lookup or pull is a test failure.

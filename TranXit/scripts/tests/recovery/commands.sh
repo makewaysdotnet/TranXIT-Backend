@@ -184,18 +184,19 @@ case "$action" in
     esac
     exec "$real" "${args[@]}" ;;
   run)
-    [ "${2:-}" = --rm ] && [ "${3:-}" = --network ] && [ "${4:-}" = tranxit-staging_backend ] && [ "${5:-}" = curlimages/curl:8.13.0 ] || exit 78
+    [ "${2:-}" = --pull=never ] && [ "${3:-}" = --rm ] && [ "${4:-}" = --network ] &&
+      [ "${5:-}" = tranxit-staging_backend ] && [ "${6:-}" = "$TRANXIT_HTTP_PROBE_IMAGE" ] || exit 78
     # Private smoke probes get owned names/labels, including on interrupted runs.
     if [[ " $* " == *' --connect-to ::caddy:443 '* ]]; then
       certificate=/fixture/ca.crt
       if [ "${F01_BREAK_PUBLIC_PROBE_TLS:-false}" = true ]; then certificate=/fixture/missing-ca.crt; fi
-      "$real" run --rm --name "$F01_PROJECT-http-$(openssl rand -hex 5)" --label "io.tranxit.recovery-test=$F01_PROJECT" \
+      "$real" run --pull=never --rm --name "$F01_PROJECT-http-$(openssl rand -hex 5)" --label "io.tranxit.recovery-test=$F01_PROJECT" \
         --network "${F01_PROJECT}_backend" --mount "type=volume,source=$F01_PROJECT-settings,target=/fixture,readonly" \
-        "${args[4]}" --cacert "$certificate" "${args[@]:5}"
+        "${args[5]}" --cacert "$certificate" "${args[@]:6}"
       exit $?
     fi
-    "$real" run --rm --name "$F01_PROJECT-http-$(openssl rand -hex 5)" --label "io.tranxit.recovery-test=$F01_PROJECT" \
-      --network "${F01_PROJECT}_backend" "${args[@]:4}"
+    "$real" run --pull=never --rm --name "$F01_PROJECT-http-$(openssl rand -hex 5)" --label "io.tranxit.recovery-test=$F01_PROJECT" \
+      --network "${F01_PROJECT}_backend" "${args[@]:5}"
     if [[ " $* " == *'http://caddy:8082/api/auth/login'* ]]; then point smoke closed; fi
     ;;
   *) echo "Refusing unscoped Docker command: $action" >&2; exit 78 ;;

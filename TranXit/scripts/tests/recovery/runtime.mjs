@@ -11,6 +11,7 @@ const frontend = fs.realpathSync(process.env.TRANXIT_RECOVERY_FRONTEND_DIR || pa
 const project = `tranxit-f01-test-${randomBytes(8).toString('hex')}`;
 const controller = `${project}-controller`;
 const label = `io.tranxit.recovery-test=${project}`;
+const probeImage = 'curlimages/curl@sha256:d43bdb28bae0be0998f3be83199bfb2b81e0a30b034b6d7586ce7e05de34c3fd';
 const output = path.join(backend, 'TranXit/Tests/TranXit.IntegrationTests/TestResults', project);
 const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => /^(PATH|PATHEXT|SYSTEMROOT|SYSTEMDRIVE|WINDIR|COMSPEC|HOME|USERPROFILE|APPDATA|LOCALAPPDATA|TEMP|TMP|PROGRAMFILES|PROGRAMDATA|CI)$/i.test(name)));
 let context;
@@ -71,6 +72,8 @@ try {
   for (const type of ['container', 'network', 'volume']) assert.equal((await ids(type)).length, 0);
   ownsNamespace = true;
   console.log(`[recovery] Owned local fixture: ${project}. Source repositories are mounted read-only.`);
+  // This models reviewed-controller installation. Runtime deploy/rollback uses --pull=never.
+  await execute(['pull', probeImage], { print: true });
   await execute(['build', '-t', `${project}:controller`, harness], { print: true });
   for (const name of ['work', 'gate', 'settings']) await execute(['volume', 'create', '--label', label, `${project}-${name}`]);
   await execute(['network', 'create', '--label', label, `${project}_control`]);

@@ -29,14 +29,17 @@ ADMISSION_OPEN="$TRANXIT_ADMISSION_DIR/open"
 ADMISSION_STATE="$TMP_ROOT/admitted"
 PUBLIC_APP_URL=https://primary.example.test
 STAGING_APP_URL=https://secondary.example.test
+TRANXIT_EDGE_PROBE_IMAGE='curlimages/curl@sha256:d43bdb28bae0be0998f3be83199bfb2b81e0a30b034b6d7586ce7e05de34c3fd'
 active_backend_sha=1111111111111111111111111111111111111111
 active_frontend_sha=2222222222222222222222222222222222222222
 backup_manifest="$TMP_ROOT/manifest.env"
 mkdir "$TRANXIT_ADMISSION_DIR"
 
 docker() {
+  [ "${1:-}" = run ] && [ "${2:-}" = --pull=never ] && [ "${3:-}" = --rm ] || return 77
+  [ "${4:-}" = --network ] && [ "${5:-}" = "${project_name}_backend" ] || return 77
+  [ "${6:-}" = "$TRANXIT_EDGE_PROBE_IMAGE" ] || return 77
   [[ " $* " == *' --connect-to ::caddy:443 '* ]] || return 77
-  [[ " $* " == *" --network ${project_name}_backend "* ]] || return 77
   [[ " $* " != *' --insecure '* && " $* " != *' -k '* && " $* " != *' --location '* && " $* " != *' POST '* ]] || return 77
   printf '%s\n' "${*: -1}" >> "$TMP_ROOT/requests"
   if [ "${*: -1}" = "$PUBLIC_APP_URL/api/roles" ]; then

@@ -84,8 +84,28 @@ fi
 
 # The supported entrypoint is installed outside the checkout; retain its immutable physical path.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-PROJECT_DIR="$(cd "${TRANXIT_DEPLOY_PROJECT_DIR:-$SCRIPT_DIR/..}" && pwd -P)"
-BACKEND_REPO_DIR="$(git -C "$PROJECT_DIR" rev-parse --show-toplevel)"
+if [ -z "${TRANXIT_DEPLOY_PROJECT_DIR:-}" ]; then
+  echo "TRANXIT_DEPLOY_PROJECT_DIR is required; invoke the reviewed controller installed outside the backend repository." >&2
+  exit 2
+fi
+if [ ! -d "$TRANXIT_DEPLOY_PROJECT_DIR" ]; then
+  echo "TRANXIT_DEPLOY_PROJECT_DIR must name the application project directory." >&2
+  exit 2
+fi
+PROJECT_DIR="$(cd "$TRANXIT_DEPLOY_PROJECT_DIR" && pwd -P)"
+BACKEND_REPO_DIR="$(git -C "$PROJECT_DIR" rev-parse --show-toplevel 2>/dev/null)" || {
+  echo "TRANXIT_DEPLOY_PROJECT_DIR must be inside the backend Git repository." >&2
+  exit 2
+}
+BACKEND_REPO_DIR="$(cd "$BACKEND_REPO_DIR" && pwd -P)"
+case "$SCRIPT_DIR/" in
+  "$BACKEND_REPO_DIR/"*)
+    echo "Refusing controller execution from inside BACKEND_REPO_DIR; invoke the reviewed external controller." >&2
+    exit 2
+    ;;
+esac
+readonly TRANXIT_EDGE_PROBE_IMAGE='curlimages/curl@sha256:d43bdb28bae0be0998f3be83199bfb2b81e0a30b034b6d7586ce7e05de34c3fd'
+export TRANXIT_HTTP_PROBE_IMAGE="$TRANXIT_EDGE_PROBE_IMAGE"
 ENV_FILE="${TRANXIT_ENV_FILE:-/opt/tranxit/.env}"
 
 if [ ! -f "$ENV_FILE" ]; then
@@ -429,7 +449,7 @@ verify_closed_public_edge() {
     for attempt in $(seq 1 12); do
       status=0
       # Connect to the public TLS listener from the private network, preserving the URL's SNI.
-      response="$(docker run --rm --network "${project_name}_backend" curlimages/curl:8.13.0 \
+      response="$(docker run --pull=never --rm --network "${project_name}_backend" "$TRANXIT_EDGE_PROBE_IMAGE" \
         --connect-timeout 5 --max-time 10 --silent --show-error \
         --connect-to '::caddy:443' --write-out '|%{http_code}|%header{retry-after}' \
         "${origin%/}/api/roles" 2>/dev/null)" || status=$?
@@ -454,7 +474,7 @@ wait_for_gateway() {
   local ready="false"
   echo "Waiting for the private edge at http://caddy:8082/api/roles (public admission stays closed)..."
   for _ in $(seq 1 60); do
-    if docker run --rm --network "${project_name}_backend" curlimages/curl:8.13.0 \
+    if docker run --pull=never --rm --network "${project_name}_backend" "$TRANXIT_EDGE_PROBE_IMAGE" \
       --connect-timeout 5 --max-time 10 -fsS http://caddy:8082/api/roles >/dev/null 2>&1; then
       ready="true"
       break

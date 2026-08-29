@@ -1,5 +1,5 @@
 # Test-only final override: base + prod + staging + this file, via edge-stack.mjs.
-# Keep the actual staging Caddyfile, production Dockerfiles, migrations and SMTP.
+# Mount the actual production Caddyfile; staging contributes only Mailpit SMTP.
 # Compose 2.24.4+ is required for !override; no service except HTTPS is published.
 x-edge-service: &edge-service
   restart: "no"
@@ -34,6 +34,17 @@ services:
     image: ${TRANXIT_EDGE_PROJECT:?Use the edge-stack.mjs wrapper}:caddy
     ports: !override
       - "127.0.0.1:${TRANXIT_EDGE_HTTPS_PORT:?Use the edge-stack.mjs wrapper}:443"
+    volumes: !override
+      - type: bind
+        source: ${TRANXIT_EDGE_CADDYFILE:?Use the edge-stack.mjs wrapper}
+        target: /etc/caddy/Caddyfile
+        read_only: true
+      - caddy-data:/data
+      - caddy-config:/config
+      - type: bind
+        source: ${TRANXIT_ADMISSION_DIR:?Use the edge-stack.mjs wrapper}
+        target: /run/tranxit/admission
+        read_only: true
 
   frontend:
     <<: *edge-service

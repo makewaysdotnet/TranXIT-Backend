@@ -996,7 +996,7 @@ PATH="$MOCK_BIN:$PATH" \
   TRANXIT_TEST_DOCKER_LOG="$DOCKER_LOG" \
   TRANXIT_TEST_RUNNING_SERVICES=$'caddy\nfrontend\nocelotapigw\naccountservice\ncourierjobservice' \
   TRANXIT_ENV_FILE="$ENV_FILE" \
-  "$BACKEND_REPO/TranXit/scripts/backup.sh" \
+  "$CONTROLLER_SCRIPTS/backup.sh" \
     --env staging \
     --release-id standalone-contract >"$STANDALONE_BACKUP_OUTPUT" 2>&1
 assert_contains "$STANDALONE_BACKUP_OUTPUT" "Verified paired backup complete"
@@ -1009,7 +1009,7 @@ start_line="$(grep -n -m1 ' start caddy frontend ocelotapigw accountservice cour
 
 set +e
 PATH="$MOCK_BIN:$PATH" TRANXIT_ENV_FILE="$ENV_FILE" \
-  "$BACKEND_REPO/TranXit/scripts/restore.sh" \
+  "$CONTROLLER_SCRIPTS/restore.sh" \
   --manifest "$MANIFEST" \
   --account-database ScratchAccount \
   --courier-database ScratchCourier \
@@ -1020,7 +1020,7 @@ assert_status 2 "$NO_ENV_STATUS" "restore without explicit environment"
 
 set +e
 PATH="$MOCK_BIN:$PATH" TRANXIT_ENV_FILE="$ENV_FILE" \
-  "$BACKEND_REPO/TranXit/scripts/restore.sh" \
+  "$CONTROLLER_SCRIPTS/restore.sh" \
   --env staging \
   --manifest "$MANIFEST" \
   --account-database ScratchAccount \
@@ -1037,7 +1037,7 @@ PATH="$MOCK_BIN:$PATH" \
   TRANXIT_TEST_DOCKER_LOG="$DOCKER_LOG" \
   TRANXIT_TEST_FAIL_SECOND_RESTORE=true \
   TRANXIT_ENV_FILE="$ENV_FILE" \
-  "$BACKEND_REPO/TranXit/scripts/restore.sh" \
+  "$CONTROLLER_SCRIPTS/restore.sh" \
     --env staging \
     --manifest "$MANIFEST" \
     --account-database Tranxit_Account \
@@ -1056,7 +1056,7 @@ set +e
 PATH="$MOCK_BIN:$PATH" \
   TRANXIT_TEST_DOCKER_LOG="$DOCKER_LOG" \
   TRANXIT_ENV_FILE="$ENV_FILE" \
-  "$BACKEND_REPO/TranXit/scripts/backup.sh" \
+  "$CONTROLLER_SCRIPTS/backup.sh" \
     --env staging \
     --release-id blocked-during-restore >"$TMP_ROOT/incomplete-restore-backup.out" 2>&1
 INCOMPLETE_STATE_BACKUP_STATUS=$?
@@ -1071,7 +1071,7 @@ set +e
 PATH="$MOCK_BIN:$PATH" \
   TRANXIT_TEST_DOCKER_LOG="$DOCKER_LOG" \
   TRANXIT_ENV_FILE="$ENV_FILE" \
-  "$BACKEND_REPO/TranXit/scripts/restore.sh" \
+  "$CONTROLLER_SCRIPTS/restore.sh" \
     --env staging \
     --manifest "$MANIFEST" \
     --account-database Tranxit_Account \
@@ -1097,7 +1097,7 @@ LIVE_RECOVERY_OUTPUT="$TMP_ROOT/live-restore-recovery.out"
 PATH="$MOCK_BIN:$PATH" \
   TRANXIT_TEST_DOCKER_LOG="$DOCKER_LOG" \
   TRANXIT_ENV_FILE="$ENV_FILE" \
-  "$BACKEND_REPO/TranXit/scripts/restore.sh" \
+  "$CONTROLLER_SCRIPTS/restore.sh" \
     --env staging \
     --manifest "$MANIFEST" \
     --account-database Tranxit_Account \
@@ -1114,7 +1114,7 @@ SCRATCH_OUTPUT="$TMP_ROOT/scratch-restore.out"
 PATH="$MOCK_BIN:$PATH" \
   TRANXIT_TEST_DOCKER_LOG="$DOCKER_LOG" \
   TRANXIT_ENV_FILE="$ENV_FILE" \
-  "$BACKEND_REPO/TranXit/scripts/restore.sh" \
+  "$CONTROLLER_SCRIPTS/restore.sh" \
     --env staging \
     --manifest "$MANIFEST" \
     --account-database Tranxit_Account_RestoreDrill \
@@ -1135,3 +1135,4 @@ bash "$SCRIPT_DIR/deploy-fence-test.sh" --contract
 bash "$SCRIPT_DIR/deploy-fence-test.sh" --admission
 bash "$SCRIPT_DIR/admission-contract-test.sh"
 bash "$SCRIPT_DIR/deploy-public-edge-test.sh"
+bash "$SCRIPT_DIR/controller-entrypoint-test.sh"

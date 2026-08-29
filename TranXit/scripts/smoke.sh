@@ -36,7 +36,8 @@ trap 'rm -f -- "$SMOKE_BODY"' EXIT
 http_command=(curl)
 if [ "${TRANXIT_SMOKE_PRIVATE_HTTP:-false}" = true ]; then
   : "${TRANXIT_SMOKE_DOCKER_NETWORK:?Set TRANXIT_SMOKE_DOCKER_NETWORK for private smoke}"
-  http_command=(docker run --rm --network "$TRANXIT_SMOKE_DOCKER_NETWORK" curlimages/curl:8.13.0)
+  : "${TRANXIT_HTTP_PROBE_IMAGE:?Set TRANXIT_HTTP_PROBE_IMAGE to the controller-pinned probe image}"
+  http_command=(docker run --pull=never --rm --network "$TRANXIT_SMOKE_DOCKER_NETWORK" "$TRANXIT_HTTP_PROBE_IMAGE")
 fi
 
 request_code() {
@@ -115,7 +116,8 @@ if [ -n "${TRANXIT_E2E_MAIL_INBOX:-}" ]; then
 
   mailpit_base_url="${TRANXIT_MAILPIT_INTERNAL_URL:-http://mailpit:8025}"
   mailpit_url="${mailpit_base_url%/}/api/v1/info"
-  mailpit_args=(run --rm --network "$TRANXIT_SMOKE_DOCKER_NETWORK" curlimages/curl:8.13.0 -fsS)
+  : "${TRANXIT_HTTP_PROBE_IMAGE:?Set TRANXIT_HTTP_PROBE_IMAGE to the controller-pinned probe image}"
+  mailpit_args=(run --pull=never --rm --network "$TRANXIT_SMOKE_DOCKER_NETWORK" "$TRANXIT_HTTP_PROBE_IMAGE" -fsS)
 
   if [ -n "${TRANXIT_E2E_MAIL_INBOX_USER:-}" ] || [ -n "${TRANXIT_E2E_MAIL_INBOX_PASSWORD:-}" ]; then
     if [ -z "${TRANXIT_E2E_MAIL_INBOX_USER:-}" ] || [ -z "${TRANXIT_E2E_MAIL_INBOX_PASSWORD:-}" ]; then
