@@ -36,13 +36,13 @@ recovery with `counterpart_sha=F1` and frontend F1 suites with
 `counterpart_sha=B0` (using the actual full hashes). Successful artifacts must
 show the same B0/F1 pair. A green default B0/F0 run is not acceptance for B0/F1.
 
-Prerequisite: GitHub only permits manual dispatch once the workflow exists on the
-repository's default branch. A new recovery/edge workflow on a candidate branch
-may therefore need a separately approved workflow-registration/bootstrap change
-before this recipe is available. This document does not authorize that merge.
-Verify availability first; do not claim final-pair CI from default-pin runs if
-dispatch is unavailable. The existing frontend E2E workflow can be dispatched
-independently when registered. See [GitHub's manual-run requirements](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow).
+Verify manual-dispatch availability rather than assuming it. GitHub's documented
+manual-run requirements describe default-branch presence, but on 2026-10-08 these
+repositories accepted exact-pair dispatch while the recovery/edge workflow paths
+on `main` returned 404. Accepted dispatch is not a passing run or proof of why it
+is available. If dispatch is unavailable, record that gap; any registration or
+bootstrap merge needs separate authorization. Never substitute default-pin
+evidence for a different final pair. See [GitHub's manual-run documentation](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow).
 
 These files establish immutable source identity only. Deployment still builds
 images from source; staging-to-production build-once image digest promotion remains
