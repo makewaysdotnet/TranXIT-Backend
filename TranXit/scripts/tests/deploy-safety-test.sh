@@ -722,6 +722,7 @@ assert_backup_precedes_migration() {
 
 if [ "$MODE" = --preflight-credibility ]; then preflight_credibility; exit; fi
 
+bash "$SCRIPT_DIR/deploy-ref-test.sh"
 create_backend_release_repo
 create_frontend_release_repo
 create_controller_fixture

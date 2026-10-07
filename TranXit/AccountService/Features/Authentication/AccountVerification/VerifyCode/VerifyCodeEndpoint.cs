@@ -59,7 +59,6 @@ public class VerifyCode
 	{
 		public async Task<Result<bool>> Handle(Command request, CancellationToken cancellationToken)
 		{
-			var result = false;
 			var validationResult = await validator.ValidateAsync(request);
 			if (!validationResult.IsValid)
 			{
@@ -67,6 +66,7 @@ public class VerifyCode
 			}
 			var user = await accountDbContext
 				.Users
+				.AsNoTracking()
 				.FirstOrDefaultAsync(
 					x => x.NormalizedEmail == EmailIdentity.Normalize(request.Email),
 					cancellationToken);
@@ -75,22 +75,30 @@ public class VerifyCode
 				return new Error("User doesn't exist");
 			}
 			var expiryTime = int.Parse(configuration["CodeVerification:ExpiryMinutes"]!);
-			if (!VerificationCodeHasher.Verify(request.Code, user.VerificationCode))
+			if (user.CodeSentAtUtc is null || !VerificationCodeHasher.Verify(request.Code, user.VerificationCode))
 			{
 				return new Error("Invalid Code");
 			}
-			var codeSentAt = user.CodeSentAtUtc?.AddMinutes(expiryTime)!;
+			var codeSentAt = user.CodeSentAtUtc.Value.AddMinutes(expiryTime);
 			if (DateTime.UtcNow > codeSentAt)
 			{
 				return new Error("Code Expired");
 			}
-			user.IsEmailVerified = true;
-			user.VerificationCode = null;
-			user.CodeSentAtUtc = null;
-			accountDbContext.Users.Update(user);
-			await accountDbContext.SaveChangesAsync(cancellationToken);
-			result = true;
-			return result;
+			// Both verification and password reset consume the same OTP state.
+			// Claim its exact snapshot once, recheck expiry at the write, and touch
+			// only verification fields so a concurrent reset cannot be reverted.
+			var earliestValidSentAt = DateTime.UtcNow.AddMinutes(-expiryTime);
+			var claimed = await accountDbContext.Users
+				.Where(candidate => candidate.Id == user.Id &&
+					candidate.PasswordHash == user.PasswordHash &&
+					candidate.VerificationCode == user.VerificationCode &&
+					candidate.CodeSentAtUtc == user.CodeSentAtUtc &&
+					candidate.CodeSentAtUtc >= earliestValidSentAt)
+				.ExecuteUpdateAsync(updates => updates
+					.SetProperty(candidate => candidate.IsEmailVerified, true)
+					.SetProperty(candidate => candidate.VerificationCode, (string?)null)
+					.SetProperty(candidate => candidate.CodeSentAtUtc, (DateTime?)null), cancellationToken);
+			return claimed == 1 ? true : new Error("Invalid Code");
 		}
 	}
 }

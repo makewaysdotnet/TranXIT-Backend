@@ -15,6 +15,9 @@ Release/
 *.log
 TestResult.xml
 /TranXit/Tests/**/TestResults/
+/TranXit/pairing-evidence/
+/TestResults/
+/TranXit/pairing-evidence/
 *.VisualState.xml
 Version.cs
 Version.h

@@ -124,27 +124,26 @@ public class UpdateBidJobStatus
 
 				return await AwardAsync(request, bid.JobId, cancellationToken);
 			}
-			else if (request.Status.Equals(JobStatusEnum.InTransit))
+			else if (request.Status is JobStatusEnum.InTransit or JobStatusEnum.Delivered)
 			{
-				if (!isCourier || bid.UserId != request.CurrentUserId || bid.JobStatusId != (int)JobStatusEnum.Won)
+				if (!isCourier || bid.UserId != request.CurrentUserId)
 				{
 					return new Error(ForbiddenError);
 				}
 
-				jobDbContext.Biddings.Attach(bid);
-				bid.JobStatusId = (int)JobStatusEnum.InTransit;
-				await jobDbContext.SaveChangesAsync(cancellationToken);
-			}
-			else if (request.Status.Equals(JobStatusEnum.Delivered))
-			{
-				if (!isCourier || bid.UserId != request.CurrentUserId || bid.JobStatusId != (int)JobStatusEnum.InTransit)
+				var expectedStatus = request.Status == JobStatusEnum.InTransit
+					? (int)JobStatusEnum.Won : (int)JobStatusEnum.InTransit;
+				// The authority and expected state must still hold at the SQL write, not only at the read above.
+				// Legacy unresolved awards stay blocked until an explicit review resolves the winner.
+				var changed = await jobDbContext.Biddings
+					.Where(current => current.Id == request.BidId && current.UserId == request.CurrentUserId &&
+						current.JobStatusId == expectedStatus && current.Job.IsJobStatusFromBid == true &&
+						current.BiddingProposals.Any(proposal => proposal.Id == current.Job.AcceptedBidProposalId))
+					.ExecuteUpdateAsync(setters => setters.SetProperty(current => current.JobStatusId, (int)request.Status), cancellationToken);
+				if (changed != 1)
 				{
 					return new Error(ForbiddenError);
 				}
-
-				jobDbContext.Biddings.Attach(bid);
-				bid.JobStatusId = (int)JobStatusEnum.Delivered;
-				await jobDbContext.SaveChangesAsync(cancellationToken);
 			}
 			else
 			{

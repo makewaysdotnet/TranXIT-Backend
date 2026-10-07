@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat >&2 <<'USAGE'
 Usage: scripts/deploy.sh --env staging|production --sha <backend-commit> \
-  --migration-policy expand-contract|restore-required [--frontend-ref <ref>] \
+  --frontend-ref <frontend-commit> --migration-policy expand-contract|restore-required \
   [--allow-first-deploy]
 
 Migration policy:
@@ -22,7 +22,7 @@ USAGE
 
 TARGET_ENV=""
 BACKEND_SHA=""
-FRONTEND_REF="main"
+FRONTEND_REF=""
 MIGRATION_POLICY=""
 ALLOW_FIRST_DEPLOY="false"
 
@@ -64,16 +64,12 @@ if [ "$TARGET_ENV" != "staging" ] && [ "$TARGET_ENV" != "production" ]; then
   echo "--env must be staging or production" >&2
   exit 2
 fi
-if ! [[ "$BACKEND_SHA" =~ ^[0-9A-Fa-f]{7,40}$ ]]; then
-  echo "--sha must be a 7-40 character Git commit SHA" >&2
+if ! [[ "$BACKEND_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "--sha must be a full 40-character lowercase Git commit SHA" >&2
   exit 2
 fi
-if ! [[ "$FRONTEND_REF" =~ ^[A-Za-z0-9._/-]+$ ]]; then
-  echo "--frontend-ref contains unsupported characters" >&2
-  exit 2
-fi
-if [[ "$FRONTEND_REF" == -* ]]; then
-  echo "--frontend-ref may not begin with a dash" >&2
+if ! [[ "$FRONTEND_REF" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "--frontend-ref must be a full 40-character lowercase Git commit SHA" >&2
   exit 2
 fi
 if [ "$MIGRATION_POLICY" != "expand-contract" ] &&
@@ -654,7 +650,7 @@ on_error() {
 
 echo "Deploy target: $TARGET_ENV"
 echo "Requested backend SHA: $BACKEND_SHA"
-echo "Frontend ref: $FRONTEND_REF"
+echo "Requested frontend SHA: $FRONTEND_REF"
 echo "Migration rollback policy: $MIGRATION_POLICY"
 
 git -C "$BACKEND_REPO_DIR" fetch --prune origin
@@ -662,16 +658,14 @@ if ! git -C "$BACKEND_REPO_DIR" rev-parse --verify --quiet "$BACKEND_SHA^{commit
   git -C "$BACKEND_REPO_DIR" fetch origin "$BACKEND_SHA"
 fi
 candidate_backend_sha="$(git -C "$BACKEND_REPO_DIR" rev-parse "$BACKEND_SHA^{commit}")"
+[ "$candidate_backend_sha" = "$BACKEND_SHA" ] || { echo 'Backend commit identity mismatch' >&2; exit 2; }
 
 git -C "$FRONTEND_DIR" fetch --prune origin
-if git -C "$FRONTEND_DIR" rev-parse --verify --quiet "origin/$FRONTEND_REF^{commit}" >/dev/null; then
-  candidate_frontend_sha="$(git -C "$FRONTEND_DIR" rev-parse "origin/$FRONTEND_REF^{commit}")"
-elif git -C "$FRONTEND_DIR" rev-parse --verify --quiet "$FRONTEND_REF^{commit}" >/dev/null; then
-  candidate_frontend_sha="$(git -C "$FRONTEND_DIR" rev-parse "$FRONTEND_REF^{commit}")"
-else
+if ! git -C "$FRONTEND_DIR" rev-parse --verify --quiet "$FRONTEND_REF^{commit}" >/dev/null; then
   git -C "$FRONTEND_DIR" fetch origin "$FRONTEND_REF"
-  candidate_frontend_sha="$(git -C "$FRONTEND_DIR" rev-parse FETCH_HEAD)"
 fi
+candidate_frontend_sha="$(git -C "$FRONTEND_DIR" rev-parse "$FRONTEND_REF^{commit}")"
+[ "$candidate_frontend_sha" = "$FRONTEND_REF" ] || { echo 'Frontend commit identity mismatch' >&2; exit 2; }
 
 if [ "$rollback_available" = "true" ]; then
   for repo_and_sha in \

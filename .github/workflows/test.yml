@@ -26,6 +26,14 @@ jobs:
       - name: Verify Docker
         run: docker info
 
+      - name: Setup Node 24 for release-control contracts
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Check immutable pairing and deploy-admission contracts
+        run: node --test ../.github/scripts/*.test.mjs
+
       - name: Validate deploy safety scripts
         run: |
           bash -n scripts/deploy.sh

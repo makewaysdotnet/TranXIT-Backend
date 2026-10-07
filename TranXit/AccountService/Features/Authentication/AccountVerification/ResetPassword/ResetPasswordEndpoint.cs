@@ -86,6 +86,7 @@ public class ResetPassword
 					return new Error(validationResult.ToString());
 				}
 				var user = await accountDbContext.Users
+					.AsNoTracking()
 					.FirstOrDefaultAsync(
 						x => x.NormalizedEmail == EmailIdentity.Normalize(request.Email),
 						cancellationToken);
@@ -110,20 +111,27 @@ public class ResetPassword
 
 				var passwordHash = BC.EnhancedHashPassword(request.Password);
 
-				user.PasswordHash = passwordHash;
-				user.VerificationCode = null;
-				user.CodeSentAtUtc = null;
-
-				accountDbContext.Users.Update(user);
-				var saved = await accountDbContext.SaveChangesAsync(cancellationToken) > 0;
-				if (saved)
+				// Compare-and-consume the exact code snapshot. Concurrent requests may
+				// verify the same hash, but only one can claim it. Password, code and
+				// refresh revocation commit together, or all roll back.
+				await using var transaction = await accountDbContext.Database.BeginTransactionAsync(cancellationToken);
+				var earliestValidSentAt = DateTime.UtcNow.AddMinutes(-expiryTime);
+				var claimed = await accountDbContext.Users
+					.Where(candidate => candidate.Id == user.Id &&
+						candidate.VerificationCode == user.VerificationCode &&
+						candidate.CodeSentAtUtc == user.CodeSentAtUtc &&
+						candidate.CodeSentAtUtc >= earliestValidSentAt)
+					.ExecuteUpdateAsync(updates => updates
+						.SetProperty(candidate => candidate.PasswordHash, passwordHash)
+						.SetProperty(candidate => candidate.VerificationCode, (string?)null)
+						.SetProperty(candidate => candidate.CodeSentAtUtc, (DateTime?)null), cancellationToken);
+				if (claimed != 1)
 				{
-					await refreshTokenService.RevokeAllForUserAsync(
-						user.Id,
-						"Password reset",
-						cancellationToken);
+					return new Error("Invalid Code");
 				}
-				return saved;
+				await refreshTokenService.RevokeAllForUserAsync(user.Id, "Password reset", cancellationToken);
+				await transaction.CommitAsync(cancellationToken);
+				return true;
 			}
 		}
 	}

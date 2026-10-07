@@ -8,10 +8,9 @@ on:
       - 'codex/**'
   workflow_dispatch:
     inputs:
-      frontend_ref:
-        description: Frontend branch or SHA to verify with the backend
-        default: main
-        required: true
+      counterpart_sha:
+        description: Optional operator-selected frontend full lowercase 40-character SHA (never a branch or tag)
+        required: false
         type: string
 
 permissions:
@@ -37,19 +36,31 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Checkout frontend
-        uses: actions/checkout@v4
-        with:
-          repository: makewaysdotnet/TranXit-Frontend
-          ref: ${{ inputs.frontend_ref || 'main' }}
-          path: TranXit-Frontend
-          fetch-depth: 0
-          persist-credentials: false
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '24'
+
+      - name: Check immutable pairing and deploy-admission contracts
+        run: node --test ../.github/scripts/*.test.mjs
+
+      - name: Validate and resolve immutable frontend selection
+        id: frontend-ref
+        env:
+          COUNTERPART_SHA: ${{ inputs.counterpart_sha || '' }}
+        run: node ../.github/scripts/ci-pair.mjs resolve ../.github/ci-pair.json makewaysdotnet/TranXIT-Backend pairing-evidence/selection.json
+
+      - name: Checkout exact frontend commit
+        uses: actions/checkout@v4
+        with:
+          repository: makewaysdotnet/TranXit-Frontend
+          ref: ${{ steps.frontend-ref.outputs.sha }}
+          path: TranXit-Frontend
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify checkout and record exact pair
+        run: node ../.github/scripts/ci-pair.mjs record pairing-evidence/selection.json makewaysdotnet/TranXIT-Backend .. ../../TranXit-Frontend pairing-evidence/source-pair.json
 
       - name: Verify local Docker
         run: docker info
@@ -77,6 +88,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: recovery-evidence-${{ github.run_attempt }}
-          path: TranXIT-Backend/TranXit/Tests/TranXit.IntegrationTests/TestResults/tranxit-f01-test-*/
+          path: |
+            TranXIT-Backend/TranXit/Tests/TranXit.IntegrationTests/TestResults/tranxit-f01-test-*/
+            TranXIT-Backend/TranXit/pairing-evidence/
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 30

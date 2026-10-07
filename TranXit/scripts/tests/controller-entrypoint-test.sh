@@ -33,7 +33,8 @@ assert_contains() {
 script_args() {
   case "$1" in
     deploy)
-      printf '%s\0' --env staging --sha 1111111111111111111111111111111111111111 --migration-policy expand-contract
+      printf '%s\0' --env staging --sha 1111111111111111111111111111111111111111 \
+        --frontend-ref 2222222222222222222222222222222222222222 --migration-policy expand-contract
       ;;
     backup)
       printf '%s\0' --env staging --release-id controller-contract

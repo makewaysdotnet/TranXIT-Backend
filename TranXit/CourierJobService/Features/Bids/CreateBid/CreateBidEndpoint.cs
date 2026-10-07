@@ -156,15 +156,19 @@ public class CreateBid
 				return new Error(validationResult.ToString());
 			}
 
-			// update job status
-			var job = await jobDbContext.Jobs.FindAsync([request.JobId], cancellationToken);
+			// Serialize marketplace eligibility with the job-row claim made by AwardAsync.
+			// Hold the update lock through inserting the bid, including when the job is already Bidding.
+			await using var transaction = await jobDbContext.Database.BeginTransactionAsync(cancellationToken);
+			var job = await jobDbContext.Jobs
+				.FromSqlInterpolated($"SELECT * FROM [Jobs] WITH (UPDLOCK, HOLDLOCK) WHERE [Id] = {request.JobId}")
+				.SingleOrDefaultAsync(cancellationToken);
 			if (job is null)
 			{
 				return new Error("Job not found");
 			}
 
 			var now = DateTime.UtcNow;
-			if (!JobAccess.IsMarketplaceOpen(job, now))
+			if (!JobAccess.IsMarketplaceOpen(job, now) || job.AcceptedBidProposalId is not null)
 			{
 				return new Error("Job is not open for bidding");
 			}
@@ -251,6 +255,7 @@ public class CreateBid
 
 			await jobDbContext.Biddings.AddAsync(createdBid, cancellationToken);
 			await jobDbContext.SaveChangesAsync(cancellationToken);
+			await transaction.CommitAsync(cancellationToken);
 			return new CreateUpdateBidResult { BidId = createdBid.Id };
 		}
 	}

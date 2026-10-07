@@ -64,6 +64,7 @@ public class SendCode
 			}
 			var user = await accountDbContext
 				.Users
+				.AsNoTracking()
 				.FirstOrDefaultAsync(
 					x => x.NormalizedEmail == EmailIdentity.Normalize(request.Email),
 					cancellationToken);
@@ -79,17 +80,28 @@ public class SendCode
 				EmailSubject = "Verification Code",
 				EmailBody = code
 			};
-			var IsEmailSent = await mailService.SendMail(mailRequest);
+			var IsEmailSent = await mailService.SendMail(mailRequest, cancellationToken);
 			if (!IsEmailSent)
 			{
 				return new Error("Failed to Send Email");
 			}
-			user.CodeSentAtUtc = DateTime.UtcNow;
-			user.VerificationCode = VerificationCodeHasher.Hash(code);
-
-			accountDbContext.Users.Update(user);
-			await accountDbContext.SaveChangesAsync(cancellationToken);
-			return true;
+			var sentAt = DateTime.UtcNow;
+			var codeHash = VerificationCodeHasher.Hash(code);
+			// Mail delivery can overlap reset, verification or another resend. Never
+			// write a stale User snapshot (especially PasswordHash) or install this
+			// code over a newer credential/OTP state. Delivery cannot be recalled;
+			// a lost compare-and-swap returns an explicit retry instead of success.
+			var updated = await accountDbContext.Users
+				.Where(candidate => candidate.Id == user.Id &&
+					candidate.PasswordHash == user.PasswordHash &&
+					candidate.VerificationCode == user.VerificationCode &&
+					candidate.CodeSentAtUtc == user.CodeSentAtUtc)
+				.ExecuteUpdateAsync(updates => updates
+					.SetProperty(candidate => candidate.VerificationCode, codeHash)
+					.SetProperty(candidate => candidate.CodeSentAtUtc, sentAt), cancellationToken);
+			return updated == 1
+				? true
+				: new Error("Verification request changed. Please request a new code.");
 		}
 	}
 }
