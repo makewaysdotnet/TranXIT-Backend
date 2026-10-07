@@ -1,0 +1,75 @@
+# Final, test-only override. The command adapter always supplies an owned project.
+x-runtime: &runtime
+  restart: "no"
+  labels:
+    io.tranxit.recovery-test: ${F01_PROJECT:?Use runtime.mjs}
+
+x-health: &health
+  interval: 2s
+  start_period: 3s
+
+volumes:
+  recovery-gate:
+    external: true
+    name: ${F01_PROJECT}-gate
+  recovery-settings:
+    external: true
+    name: ${F01_PROJECT}-settings
+  tranxit-sql-data:
+    labels: { io.tranxit.recovery-test: "${F01_PROJECT}" }
+  tranxit-rabbitmq-data:
+    labels: { io.tranxit.recovery-test: "${F01_PROJECT}" }
+  tranxit-backups:
+    labels: { io.tranxit.recovery-test: "${F01_PROJECT}" }
+  caddy-data:
+    labels: { io.tranxit.recovery-test: "${F01_PROJECT}" }
+  caddy-config:
+    labels: { io.tranxit.recovery-test: "${F01_PROJECT}" }
+
+networks:
+  backend:
+    labels: { io.tranxit.recovery-test: "${F01_PROJECT}" }
+  edge:
+    labels: { io.tranxit.recovery-test: "${F01_PROJECT}" }
+  egress:
+    labels: { io.tranxit.recovery-test: "${F01_PROJECT}" }
+
+services:
+  caddy:
+    <<: *runtime
+    image: ${F01_PROJECT}-caddy:${TRANXIT_IMAGE_TAG}
+    ports: !override
+      - "127.0.0.1::443"
+    volumes: !override
+      - recovery-settings:/etc/caddy:ro
+      - recovery-gate:/run/tranxit/admission:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    healthcheck: *health
+  frontend:
+    <<: *runtime
+    image: ${F01_PROJECT}-frontend:${TRANXIT_IMAGE_TAG}
+    environment:
+      TRANXIT_DEPLOY_ENV: production
+      TRANXIT_ENABLE_DEMO_DATA: "false"
+    healthcheck: *health
+  accountservice:
+    <<: *runtime
+    image: ${F01_PROJECT}-account:${TRANXIT_IMAGE_TAG}
+    healthcheck: *health
+  courierjobservice:
+    <<: *runtime
+    image: ${F01_PROJECT}-courier:${TRANXIT_IMAGE_TAG}
+    healthcheck: *health
+  ocelotapigw:
+    <<: *runtime
+    image: ${F01_PROJECT}-gateway:${TRANXIT_IMAGE_TAG}
+    healthcheck: *health
+  sqlserver:
+    <<: *runtime
+    healthcheck: *health
+  rabbitmq:
+    <<: *runtime
+    healthcheck: *health
+  mailpit:
+    <<: *runtime

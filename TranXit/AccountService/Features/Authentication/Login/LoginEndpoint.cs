@@ -53,12 +53,9 @@ public class AccountLogin
 				.EmailAddress().WithMessage("Invalid Email Address");
 
 			RuleFor(c => c.Password)
-				.NotEmpty().WithMessage("Your password cannot be empty")
-					.MinimumLength(8).WithMessage("Your password length must be at least 8.")
-					.Matches(@"[A-Z]+").WithMessage("Your password must contain at least one uppercase letter.")
-					.Matches(@"[a-z]+").WithMessage("Your password must contain at least one lowercase letter.")
-					.Matches(@"[0-9]+").WithMessage("Your password must contain at least one number.")
-					.Matches(@"[\!\?\@\-\*\.]+").WithMessage("Your password must contain at least one (!*?-@.)");
+				.NotEmpty().WithMessage("Your password cannot be empty");
+			// Creation/reset own password policy. Login verifies the stored credential,
+			// including valid passwords issued under a previous policy.
 		}
 	}
 	internal sealed class Handler(AccountDbContext accountDbContext,
@@ -75,12 +72,15 @@ public class AccountLogin
 			{
 				return new Error(validationResult.ToString()); //Error("Validation Error").WithError(validationResult.ToString());
 			}
+			// Keep credential verification and refresh issuance in the same user lock.
+			// Otherwise a login that read the old password can issue a new session after reset.
+			await using var transaction = await accountDbContext.Database.BeginTransactionAsync(cancellationToken);
+			var normalizedEmail = EmailIdentity.Normalize(request.Email);
 			var user = await accountDbContext
 				.Users
+				.FromSqlInterpolated($"SELECT * FROM [Users] WITH (UPDLOCK, HOLDLOCK) WHERE [NormalizedEmail] = {normalizedEmail}")
 				.Include(x => x.Role)
-				.FirstOrDefaultAsync(
-					x => x.NormalizedEmail == EmailIdentity.Normalize(request.Email),
-					cancellationToken);
+				.SingleOrDefaultAsync(cancellationToken);
 			if (user is null)
 			{
 				return new Error("User doesn't exist");
@@ -117,6 +117,7 @@ public class AccountLogin
 			};
 			var token = jwtTokenBuilder.BuildToken(tokenBuilderRequest);
 			var refreshToken = await refreshTokenService.IssueAsync(user, cancellationToken);
+			await transaction.CommitAsync(cancellationToken);
 			return new LoginResult
 			{
 				Id = user.Id,

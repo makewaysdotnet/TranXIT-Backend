@@ -50,9 +50,22 @@ internal sealed class RefreshTokenService(AccountDbContext accountDbContext, ICo
 			return null;
 		}
 
+		var userId = await accountDbContext.RefreshTokens.AsNoTracking()
+			.Where(token => token.Id == parsed.Value.Id)
+			.Select(token => (int?)token.UserId).SingleOrDefaultAsync(cancellationToken);
+		if (userId is null)
+		{
+			return null;
+		}
+
 		await using var transaction = await accountDbContext.Database.BeginTransactionAsync(
 			IsolationLevel.Serializable,
 			cancellationToken);
+		// Use the same user -> refresh lock order as login/password reset. A reset
+		// must either revoke this rotation or finish before it checks revocation.
+		await accountDbContext.Users
+			.FromSqlInterpolated($"SELECT * FROM [Users] WITH (UPDLOCK, HOLDLOCK) WHERE [Id] = {userId.Value}")
+			.Select(user => user.Id).SingleAsync(cancellationToken);
 		var current = await accountDbContext.RefreshTokens
 			.FromSqlInterpolated(
 				$"SELECT * FROM [RefreshTokens] WITH (UPDLOCK, HOLDLOCK) WHERE [Id] = {parsed.Value.Id}")

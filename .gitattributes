@@ -2,4 +2,5 @@
 *.yml text eol=lf
 *.yaml text eol=lf
 Caddyfile text eol=lf
+Caddyfile.staging text eol=lf
 Dockerfile text eol=lf

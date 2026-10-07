@@ -54,7 +54,7 @@ expect_status() {
 
 # Load the real helper bodies without executing deploy.sh's checkout/deployment entry point.
 for name in close_public_admission record_public_admission open_public_admission complete_public_admission \
-  fence_application_stack start_application_stack stop_application_stack run_release_smoke rollback_known_green on_error; do
+  preserve_unverified_admission fence_application_stack start_application_stack stop_application_stack run_release_smoke rollback_known_green on_error; do
   definition="$(awk -v name="$name" '
     $0 == name "() {" { selected=1 }
     selected { print }
@@ -70,6 +70,8 @@ TARGET_ENV=staging
 project_name=tranxit-f02-contract
 base_url=http://unused.example.invalid
 SCRIPT_DIR="$TMP_ROOT/scripts"
+CONTROLLER_DIR="$SCRIPT_DIR"
+PROJECT_DIR="$TMP_ROOT"
 mkdir -p "$SCRIPT_DIR" "$TMP_ROOT/states"
 export TRANXIT_FENCE_EVENTS="$TMP_ROOT/events.log"
 export TRANXIT_EGRESS_PROBE_URL=https://unused.example.invalid
@@ -93,6 +95,8 @@ chmod +x "$SCRIPT_DIR/"*.sh
 
 checkout_known_green() { echo checkout-green >> "$TRANXIT_FENCE_EVENTS"; }
 wait_for_gateway() { echo gateway-ready >> "$TRANXIT_FENCE_EVENTS"; }
+# The separate closed-edge contract and real recovery suite exercise HTTPS; this fixture tests fencing.
+verify_closed_public_edge() { closed_edge_verified=true; echo closed-edge >> "$TRANXIT_FENCE_EVENTS"; }
 
 reset_case() {
   : > "$TRANXIT_FENCE_EVENTS"
@@ -111,11 +115,14 @@ reset_case() {
   writers_stopped=true
   migration_started=false
   admission_may_have_opened=false
+  closed_edge_verified=false
   marker_commit_started=false
   MIGRATION_POLICY=expand-contract
   backup_manifest=""
   green_backend_sha=1111111111111111111111111111111111111111
   green_frontend_sha=2222222222222222222222222222222222222222
+  active_backend_sha="$green_backend_sha"
+  active_frontend_sha="$green_frontend_sha"
   green_admission_policy=private-smoke-v1
   MARKER_DIR="$TMP_ROOT"
   TRANXIT_ADMISSION_DIR="$TMP_ROOT/admission"
@@ -341,6 +348,7 @@ admission_failure_guards() {
   MIGRATION_POLICY=restore-required
   migration_started=true
   record_public_admission candidate-backend candidate-frontend
+  verify_closed_public_edge
   mv() {
     if [ "${*: -1}" = "$ADMISSION_OPEN" ]; then return 55; fi
     command mv "$@"

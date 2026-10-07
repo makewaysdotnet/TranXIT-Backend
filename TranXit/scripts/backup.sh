@@ -54,8 +54,27 @@ if ! [[ "$RELEASE_ID" =~ ^[A-Za-z0-9._-]+$ ]]; then
   exit 2
 fi
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+if [ -z "${TRANXIT_DEPLOY_PROJECT_DIR:-}" ]; then
+  echo "TRANXIT_DEPLOY_PROJECT_DIR is required; invoke the reviewed controller installed outside the backend repository." >&2
+  exit 2
+fi
+if [ ! -d "$TRANXIT_DEPLOY_PROJECT_DIR" ]; then
+  echo "TRANXIT_DEPLOY_PROJECT_DIR must name the application project directory." >&2
+  exit 2
+fi
+PROJECT_DIR="$(cd "$TRANXIT_DEPLOY_PROJECT_DIR" && pwd -P)"
+BACKEND_REPO_DIR="$(git -C "$PROJECT_DIR" rev-parse --show-toplevel 2>/dev/null)" || {
+  echo "TRANXIT_DEPLOY_PROJECT_DIR must be inside the backend Git repository." >&2
+  exit 2
+}
+BACKEND_REPO_DIR="$(cd "$BACKEND_REPO_DIR" && pwd -P)"
+case "$SCRIPT_DIR/" in
+  "$BACKEND_REPO_DIR/"*)
+    echo "Refusing controller execution from inside BACKEND_REPO_DIR; invoke the reviewed external controller." >&2
+    exit 2
+    ;;
+esac
 ENV_FILE="${TRANXIT_ENV_FILE:-/opt/tranxit/.env}"
 
 if [ ! -f "$ENV_FILE" ]; then
@@ -180,6 +199,14 @@ if [ -e "$backup_set_dir" ]; then
 fi
 mkdir -p "$backup_set_dir"
 chmod 700 "$BACKUP_DIR" "$BACKUP_DIR/$TARGET_ENV" "$backup_set_dir"
+
+# A fresh named volume is root-owned; only this scratch directory needs initialization.
+compose exec -T --user root sqlserver /bin/bash -lc '
+  set -euo pipefail
+  test ! -L /var/opt/mssql/backup
+  install -d -o mssql -g mssql -m 700 /var/opt/mssql/backup
+'
+compose exec -T sqlserver /bin/bash -lc 'test -w /var/opt/mssql/backup'
 
 database_migration_head() {
   local database="$1"

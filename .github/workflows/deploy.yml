@@ -12,13 +12,12 @@ on:
           - staging
           - production
       sha:
-        description: Backend commit SHA to deploy
+        description: Backend full 40-character lowercase commit SHA to deploy
         required: true
         type: string
       frontend_ref:
-        description: Frontend branch, tag, or SHA to deploy
-        required: false
-        default: main
+        description: Frontend full 40-character lowercase commit SHA to deploy
+        required: true
         type: string
       migration_policy:
         description: Rollback policy reviewed for this release's migrations
@@ -38,54 +37,56 @@ concurrency:
   group: tranxit-deploy-${{ inputs.environment }}
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   deploy:
     name: deploy-${{ inputs.environment }}
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     steps:
-      - name: Validate inputs
+      - name: Checkout reviewed workflow controls
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Verify source and approval admission contracts
+        run: node --test .github/scripts/*.test.mjs
+
+      - name: Validate immutable inputs and production approval before SSH
         env:
           TARGET_ENV: ${{ inputs.environment }}
           BACKEND_SHA: ${{ inputs.sha }}
           FRONTEND_REF: ${{ inputs.frontend_ref }}
           MIGRATION_POLICY: ${{ inputs.migration_policy }}
           ALLOW_FIRST_DEPLOY: ${{ inputs.allow_first_deploy }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-
-          if [[ ! "$BACKEND_SHA" =~ ^[0-9A-Fa-f]{7,40}$ ]]; then
-            echo "::error::Backend SHA must contain 7-40 hexadecimal characters"
-            exit 1
-          fi
-          if [[ ! "$FRONTEND_REF" =~ ^[A-Za-z0-9._/-]+$ ]] || [[ "$FRONTEND_REF" == -* ]]; then
-            echo "::error::Frontend ref contains unsupported characters"
-            exit 1
-          fi
-          if [ "$MIGRATION_POLICY" != "expand-contract" ] &&
-             [ "$MIGRATION_POLICY" != "restore-required" ]; then
-            echo "::error::Unsupported migration policy"
-            exit 1
-          fi
-          if [ "$ALLOW_FIRST_DEPLOY" != "true" ] && [ "$ALLOW_FIRST_DEPLOY" != "false" ]; then
-            echo "::error::allow_first_deploy must be true or false"
-            exit 1
-          fi
+          node .github/scripts/deploy-admission.mjs
 
           if [ "$TARGET_ENV" = "production" ]; then
             {
               echo "## Production approval gate"
               echo
-              echo "This job uses the GitHub Actions \`production\` environment. Configure that environment"
-              echo "with a required reviewer before running production deploys. The approval prompt shows:"
+              echo "Production reviewer policy and this fresh run's independent direct-user approval were checked before SSH."
               echo
               echo "- Backend SHA: \`$BACKEND_SHA\`"
-              echo "- Frontend ref: \`$FRONTEND_REF\`"
+              echo "- Frontend SHA: \`$FRONTEND_REF\`"
               echo "- Migration policy: \`$MIGRATION_POLICY\`"
               echo "- First deploy acknowledged: \`$ALLOW_FIRST_DEPLOY\`"
               echo
-              echo "The reviewer must confirm the same backend SHA, frontend ref, and migration policy were"
+              echo "The reviewer must confirm the same backend SHA, frontend SHA, and migration policy were"
               echo "deployed and smoked successfully on staging before approving this production job."
+              echo "Source identity does not enforce build-once image-digest promotion; that release gate remains open."
+              echo "The admin-bypass setting is not exposed by the policy API; verify it separately in repository settings."
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
@@ -166,9 +167,13 @@ jobs:
           DEPLOY_USER: ${{ steps.host.outputs.user }}
         run: |
           set -euo pipefail
+          # A separately reviewed controller survives application checkout/rollback. The shared
+          # lock also prevents an operator from switching its version during script startup.
           printf -v deploy_command \
-            'cd %q && ./scripts/deploy.sh --env %q --sha %q --frontend-ref %q --migration-policy %q' \
+            'flock --shared %q env TRANXIT_DEPLOY_PROJECT_DIR=%q bash %q --env %q --sha %q --frontend-ref %q --migration-policy %q' \
+            /opt/tranxit/controller.lock \
             /opt/tranxit/backend/TranXit \
+            /opt/tranxit/controller/scripts/deploy.sh \
             "$TARGET_ENV" \
             "$BACKEND_SHA" \
             "$FRONTEND_REF" \
@@ -196,7 +201,7 @@ jobs:
             echo
             echo "- Environment: \`$TARGET_ENV\`"
             echo "- Backend SHA: \`$BACKEND_SHA\`"
-            echo "- Frontend ref: \`$FRONTEND_REF\`"
+            echo "- Frontend SHA: \`$FRONTEND_REF\`"
             echo "- Migration policy: \`$MIGRATION_POLICY\`"
             echo "- First deploy acknowledged: \`$ALLOW_FIRST_DEPLOY\`"
             echo "- Result: \`${{ job.status }}\`"

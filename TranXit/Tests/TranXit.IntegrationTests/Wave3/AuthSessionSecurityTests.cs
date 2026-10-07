@@ -57,20 +57,15 @@ public sealed class AuthSessionSecurityTests(SqlContainerFixture fixture)
 	{
 		// UC-AUTH-10
 		var login = await LoginSeedCustomerAsync();
-		var logoutRequest = RequestWithRefreshCookie(
-			HttpMethod.Post,
-			"/api/logout",
-			login.RefreshToken!);
-
-		var logoutResponse = await AccountClient.SendAsync(logoutRequest);
+		var logoutResponse = await AccountClient.PostAsJsonAsync("/api/logout", new { refreshToken = login.RefreshToken });
 		var refreshResponse = await RefreshAsync(login.RefreshToken!);
 
 		logoutResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 		refreshResponse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 	}
 
-	[Fact(DisplayName = "T-AUTH-10.PasswordResetRevokesAllSessions")]
-	public async Task PasswordResetRevokesAllSessions()
+	[Fact(DisplayName = "T-AUTH-10.PasswordResetRevokesAllRefreshSessions")]
+	public async Task PasswordResetRevokesAllRefreshSessions()
 	{
 		// UC-AUTH-5, UC-AUTH-10
 		const string resetCode = "332211";
@@ -97,6 +92,13 @@ public sealed class AuthSessionSecurityTests(SqlContainerFixture fixture)
 		resetResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 		firstRefresh.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 		secondRefresh.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+		// Revocation stops renewal, not cryptographically valid access JWTs. This
+		// assertion records the existing bounded-lifetime contract, not immediate logout.
+		using var accessRequest = new HttpRequestMessage(HttpMethod.Get, "/api/users/1");
+		accessRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", firstLogin.Token);
+		using var accessResponse = await AccountClient.SendAsync(accessRequest);
+		accessResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 	}
 
 	[Fact(DisplayName = "T-AUTH-10.RefreshReuseRevokesDescendants")]
@@ -168,13 +170,4 @@ public sealed class AuthSessionSecurityTests(SqlContainerFixture fixture)
 	private Task<HttpResponseMessage> RefreshAsync(string refreshToken) =>
 		AccountClient.PostAsJsonAsync("/api/refresh", new { refreshToken });
 
-	private static HttpRequestMessage RequestWithRefreshCookie(
-		HttpMethod method,
-		string path,
-		string refreshToken)
-	{
-		var request = new HttpRequestMessage(method, path);
-		request.Headers.Add("Cookie", $"tranxit_refresh={refreshToken}");
-		return request;
-	}
 }

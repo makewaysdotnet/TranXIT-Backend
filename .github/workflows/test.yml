@@ -17,6 +17,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Admission regressions inspect the real pre-gate Caddyfile revision.
+          fetch-depth: 0
 
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
@@ -25,6 +28,14 @@ jobs:
 
       - name: Verify Docker
         run: docker info
+
+      - name: Setup Node 24 for release-control contracts
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Check immutable pairing and deploy-admission contracts
+        run: node --test ../.github/scripts/*.test.mjs
 
       - name: Validate deploy safety scripts
         run: |
